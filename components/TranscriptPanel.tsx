@@ -1,8 +1,9 @@
 "use client";
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, EyeOff, RotateCcw, Scissors } from "lucide-react";
+import { Eye, EyeOff, Pencil, RotateCcw, Scissors, WandSparkles, X } from "lucide-react";
 import { useEditorStore } from "@/lib/store";
+import { findFillerWordIds } from "@/lib/fillers";
 import type { SpeakerTurn, Word } from "@/lib/types";
 
 export const SPEAKER_COLORS = [
@@ -54,7 +55,7 @@ const WordSpan = memo(function WordSpan({
         word.deleted
           ? "word-deleted bg-red-50 text-red-400 line-through decoration-red-300"
           : active
-            ? "bg-indigo-200/80 text-zinc-900"
+            ? "bg-neutral-200/80 text-zinc-900"
             : "text-zinc-800 hover:bg-indigo-50"
       }`}
     >
@@ -81,12 +82,23 @@ export default function TranscriptPanel() {
   const toggleShowDeleted = useEditorStore((s) => s.toggleShowDeleted);
   const deleteWords = useEditorStore((s) => s.deleteWords);
   const restoreWords = useEditorStore((s) => s.restoreWords);
+  const correctWords = useEditorStore((s) => s.correctWords);
   const playing = useEditorStore((s) => s.playing);
   const activeWordId = useEditorStore((s) => findActiveWordId(s.words, s.currentTime));
 
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  const [correcting, setCorrecting] = useState<{
+    ids: number[];
+    top: number;
+    left: number;
+    containerWidth: number;
+  } | null>(null);
+  const [correctText, setCorrectText] = useState("");
+  // Mirrors `correcting` so the selectionchange handler (which has its own
+  // dependency list) can freeze the highlight while the popover is open.
+  const correctingRef = useRef(false);
 
   const turns = useMemo<SpeakerTurn[]>(() => {
     const out: SpeakerTurn[] = [];
@@ -99,6 +111,11 @@ export default function TranscriptPanel() {
   }, [words]);
 
   const deletedCount = useMemo(() => words.filter((w) => w.deleted).length, [words]);
+  const fillerIds = useMemo(() => findFillerWordIds(words), [words]);
+
+  const removeFillers = useCallback(() => {
+    deleteWords(fillerIds);
+  }, [deleteWords, fillerIds]);
 
   const seekToWord = useCallback((word: Word) => {
     const { videoEl, setCurrentTime } = useEditorStore.getState();
@@ -117,6 +134,8 @@ export default function TranscriptPanel() {
       markedRef.current.clear();
     };
     const handler = () => {
+      // Keep the highlight frozen on the words being corrected.
+      if (correctingRef.current) return;
       const container = containerRef.current;
       const sel = window.getSelection();
       if (!container || !sel || sel.isCollapsed || sel.rangeCount === 0) {
@@ -185,6 +204,49 @@ export default function TranscriptPanel() {
     setSelection(null);
   }, [selection, restoreWords]);
 
+  const openCorrect = useCallback(() => {
+    if (!selection) return;
+    const idSet = new Set(selection.ids);
+    const text = words
+      .filter((w) => idSet.has(w.id))
+      .map((w) => w.text)
+      .join(" ");
+    correctingRef.current = true;
+    setCorrectText(text);
+    setCorrecting({
+      ids: selection.ids,
+      top: selection.top,
+      left: selection.left,
+      containerWidth: containerRef.current?.clientWidth ?? 640,
+    });
+    setSelection(null);
+    window.getSelection()?.removeAllRanges();
+  }, [selection, words]);
+
+  const closeCorrect = useCallback(() => {
+    correctingRef.current = false;
+    for (const el of markedRef.current) el.removeAttribute("data-sel");
+    markedRef.current.clear();
+    setCorrecting(null);
+  }, []);
+
+  const applyCorrection = useCallback(() => {
+    if (!correcting) return;
+    correctWords(correcting.ids, correctText);
+    closeCorrect();
+  }, [correcting, correctText, correctWords, closeCorrect]);
+
+  // Close the correction popover when clicking outside of it.
+  const popoverRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!correcting) return;
+    const handler = (e: MouseEvent) => {
+      if (!popoverRef.current?.contains(e.target as Node)) closeCorrect();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [correcting, closeCorrect]);
+
   // Delete / Backspace cuts the selected words.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -215,16 +277,26 @@ export default function TranscriptPanel() {
         <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
           Transcript
         </span>
-        {status === "ready" && (
-          <span className="hidden text-xs text-zinc-400 md:inline">
-            · select words and press ⌫ to cut
-          </span>
-        )}
         <div className="ml-auto flex items-center gap-2">
+          {status === "ready" && (
+            <span className="hidden text-xs text-zinc-400 md:inline">
+              select words and press ⌫ to cut
+            </span>
+          )}
           {deletedCount > 0 && (
-            <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-500">
+            <span className="rounded-md bg-red-50 px-2 py-0.5 text-[9px] font-medium text-red-500">
               {deletedCount} word{deletedCount === 1 ? "" : "s"} cut
             </span>
+          )}
+          {status === "ready" && fillerIds.length > 0 && (
+            <button
+              onClick={removeFillers}
+              title='Cut filler words ("um", "uh", …) from the video'
+              className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100"
+            >
+              <WandSparkles size={14} />
+              Remove fillers ({fillerIds.length})
+            </button>
           )}
           <button
             onClick={toggleShowDeleted}
@@ -241,29 +313,29 @@ export default function TranscriptPanel() {
         <div ref={containerRef} className="relative mx-auto max-w-2xl px-8 py-8">
           {busy && (
             <div className="flex flex-col items-start gap-4">
-              <div className="w-full rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+              <div className="w-full bg-zinc-50 p-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-500 border-t-transparent" />
                   <p className="text-sm font-medium text-zinc-700">{progress.message}</p>
                   {progress.value !== null && (
-                    <span className="ml-auto text-xs tabular-nums text-zinc-400">
-                      {Math.round(progress.value * 100)}%
-                    </span>
+                    <>
+                      <div className="ml-auto w-[100px] h-1 overflow-hidden rounded-full bg-zinc-200">
+                        <div
+                          className="h-full rounded-full bg-neutral-500 transition-[width] duration-300"
+                          style={{ width: `${progress.value * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-xs tabular-nums text-zinc-400">
+                        {Math.round(progress.value * 100)}%
+                      </span>
+                    </>
                   )}
                 </div>
-                {progress.value !== null && (
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-200">
-                    <div
-                      className="h-full rounded-full bg-indigo-500 transition-[width] duration-300"
-                      style={{ width: `${progress.value * 100}%` }}
-                    />
-                  </div>
-                )}
               </div>
               {partialText && (
                 <p className="text-[15px] leading-8 text-zinc-400">
                   {partialText}
-                  <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-indigo-500 align-middle" />
+                  <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-neutral-500 align-middle" />
                 </p>
               )}
             </div>
@@ -304,7 +376,7 @@ export default function TranscriptPanel() {
             </div>
           )}
 
-          {selection && (
+          {selection && !correcting && (
             <div
               className="absolute z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg shadow-zinc-900/10"
               style={{ top: selection.top, left: selection.left }}
@@ -319,6 +391,13 @@ export default function TranscriptPanel() {
                   Cut
                 </button>
               )}
+              <button
+                onClick={openCorrect}
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-zinc-700 transition hover:bg-zinc-100"
+              >
+                <Pencil size={13} />
+                Correct
+              </button>
               {selection.anyDeleted && (
                 <button
                   onClick={restoreSelection}
@@ -328,6 +407,50 @@ export default function TranscriptPanel() {
                   Restore
                 </button>
               )}
+            </div>
+          )}
+
+          {correcting && (
+            <div
+              ref={popoverRef}
+              className="absolute z-20 w-80 max-w-[calc(100%-16px)] -translate-x-1/2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-xl shadow-zinc-900/10"
+              style={{
+                top: Math.max(4, correcting.top - 56),
+                left: Math.min(
+                  Math.max(168, correcting.left),
+                  correcting.containerWidth - 168
+                ),
+              }}
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[13px] font-semibold text-zinc-800">Correct</span>
+                <button
+                  onClick={closeCorrect}
+                  className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+              <input
+                autoFocus
+                value={correctText}
+                onChange={(e) => setCorrectText(e.target.value)}
+                onFocus={(e) => e.currentTarget.select()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applyCorrection();
+                  else if (e.key === "Escape") closeCorrect();
+                }}
+                className="w-full rounded-lg border border-zinc-300 bg-zinc-50 px-2.5 py-1.5 text-sm text-zinc-800 outline-none focus:border-zinc-500 focus:bg-white"
+              />
+              <div className="mt-2.5 flex justify-end">
+                <button
+                  onClick={applyCorrection}
+                  disabled={correctText.trim().length === 0}
+                  className="flex h-8 items-center rounded-full bg-zinc-900 px-4 text-[13px] font-medium text-white transition hover:bg-zinc-700 disabled:opacity-40"
+                >
+                  Correct
+                </button>
+              </div>
             </div>
           )}
         </div>
