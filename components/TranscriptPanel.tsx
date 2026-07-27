@@ -259,10 +259,6 @@ export default function TranscriptPanel() {
                     />
                   </div>
                 )}
-                <p className="mt-2 text-xs text-zinc-400">
-                  Everything runs locally in your browser — this can take a while on
-                  first use while models are cached.
-                </p>
               </div>
               {partialText && (
                 <p className="text-[15px] leading-8 text-zinc-400">
