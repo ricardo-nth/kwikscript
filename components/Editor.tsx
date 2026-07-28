@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { isSpeechAnalyzerModel, isWhisperModel } from "@/lib/models";
 import { useEditorStore } from "@/lib/store";
 import { extractAudio, getFFmpeg } from "@/lib/ffmpeg";
 import { useTranscriber } from "@/hooks/useTranscriber";
+import { useSpeechAnalyzerTranscriber } from "@/hooks/useSpeechAnalyzer";
 import TopBar from "./TopBar";
 import UploadScreen from "./UploadScreen";
 import TranscriptPanel from "./TranscriptPanel";
@@ -17,14 +19,17 @@ export default function Editor() {
   const skipTranscription = useEditorStore((s) => s.skipTranscription);
   const loadVideo = useEditorStore((s) => s.loadVideo);
   const { transcribe } = useTranscriber();
+  const { transcribeFile: transcribeSpeechAnalyzer } = useSpeechAnalyzerTranscriber();
 
   // Processing pipeline: load ffmpeg -> extract audio -> (maybe) transcribe.
   // Restored projects already have words; they only need PCM for the waveform.
+  // SpeechAnalyzer runs in the Electron main process (skips the Whisper worker).
   const startedFor = useRef<File | null>(null);
   useEffect(() => {
     if (!videoFile || startedFor.current === videoFile) return;
     startedFor.current = videoFile;
     const restoreOnly = useEditorStore.getState().skipTranscription;
+    const model = useEditorStore.getState().model;
     (async () => {
       const s = useEditorStore.getState();
       try {
@@ -36,15 +41,19 @@ export default function Editor() {
         if (restoreOnly) {
           s.setStatus("ready");
           s.setProgress({ message: "", value: null });
-        } else {
+        } else if (isSpeechAnalyzerModel(model)) {
+          await transcribeSpeechAnalyzer(videoFile);
+        } else if (isWhisperModel(model)) {
           transcribe(audio, audio.length / 16000);
+        } else {
+          s.setError("Select a transcript source before dropping media.");
         }
       } catch (err) {
         console.error("Processing pipeline failed:", err);
         s.setError(err instanceof Error ? err.message : "Failed to process this file.");
       }
     })();
-  }, [videoFile, skipTranscription, transcribe]);
+  }, [videoFile, skipTranscription, transcribe, transcribeSpeechAnalyzer]);
 
   // Global shortcuts: space = play/pause, ⌘Z / ⇧⌘Z = undo / redo.
   useEffect(() => {

@@ -103,7 +103,7 @@ Everything else is derived:
 ## Future work
 
 - ✅ Electron desktop shell with signed macOS / Windows / Linux releases.
-- Native macOS SpeechAnalyzer as an optional transcription backend.
+- ✅ Native macOS SpeechAnalyzer as an optional transcription backend.
 - Correct/retype words (text overrides for captions), speaker renaming.
 - Filler-word detection ("um", "uh") with one-click removal.
 - Larger Whisper variants + language selection UI; local model import for

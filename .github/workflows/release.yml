@@ -43,6 +43,11 @@ jobs:
           echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > "$RUNNER_TEMP/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8"
           chmod 600 "$RUNNER_TEMP/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8"
 
+      # macOS: build the SpeechAnalyzer helper (requires Xcode 26 / macOS 26 SDK).
+      - name: Build SpeechAnalyzer helper
+        if: matrix.os == 'macos-latest'
+        run: make -C native/speechanalyzer build
+
       # macOS: build, sign (Developer ID), notarize, and publish to GitHub Releases.
       - name: Build, sign & publish (macOS)
         if: matrix.os == 'macos-latest'

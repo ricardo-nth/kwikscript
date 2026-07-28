@@ -7,7 +7,7 @@ import {
   parseTranscriptFile,
   TRANSCRIPT_ACCEPT,
 } from "@/lib/parseTranscript";
-import { isWhisperModel } from "@/lib/models";
+import { isSpeechAnalyzerModel, isWhisperModel } from "@/lib/models";
 import { useEditorStore } from "@/lib/store";
 import {
   ModelOption,
@@ -39,7 +39,7 @@ export default function ImportTranscriptOption() {
     ModelOptionContextValue,
     "keepMenuOpen" | "closeMenu" | "select"
   > | null>(null);
-  const previousModelRef = useRef<"base" | "small">("base");
+  const previousModelRef = useRef<"base" | "small" | "speechanalyzer">("base");
   const pickGenRef = useRef(0);
 
   /** Reset import-pick state only — never touch the dropdown open state. */
@@ -117,7 +117,7 @@ export default function ImportTranscriptOption() {
         onSelect={(ctx) => {
           menuRef.current = ctx;
           const current = useEditorStore.getState().model;
-          if (isWhisperModel(current)) {
+          if (isWhisperModel(current) || isSpeechAnalyzerModel(current)) {
             previousModelRef.current = current;
           }
           // Do not set model to "import" until a file is chosen. Close the menu

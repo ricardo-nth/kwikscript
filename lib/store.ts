@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type { EditorStatus, ProgressInfo, Word } from "./types";
 import {
   isModelChoice,
+  isSpeechAnalyzerModel,
   isWhisperModel,
   loadModelPreference,
   saveModelPreference,
@@ -151,7 +152,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       mediaKind: kind,
       projectId: null,
       skipTranscription: Boolean(imported),
-      model: imported ? "import" : isWhisperModel(current) ? current : "base",
+      model: imported
+        ? "import"
+        : isWhisperModel(current) || isSpeechAnalyzerModel(current)
+          ? current
+          : "base",
       pendingTranscript: null,
       status: "preparing",
       progress: {
@@ -209,7 +214,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   setModel: (model) => {
-    if (isWhisperModel(model)) {
+    if (isWhisperModel(model) || isSpeechAnalyzerModel(model)) {
       saveModelPreference(model);
       set({ model, pendingTranscript: null });
     } else {
@@ -392,6 +397,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 /** Apply the stored model choice after mount (avoids SSR/localStorage mismatch). */
 export function hydrateModelPreference() {
   const stored = loadModelPreference();
+  // SpeechAnalyzer only works in the macOS Electron app — fall back on web.
+  if (
+    isSpeechAnalyzerModel(stored) &&
+    (typeof window === "undefined" ||
+      window.rescriptDesktop?.platform !== "darwin" ||
+      !window.rescriptDesktop.speechAnalyzer)
+  ) {
+    if (useEditorStore.getState().model !== "base") {
+      useEditorStore.setState({ model: "base" });
+    }
+    return;
+  }
   if (stored !== useEditorStore.getState().model) {
     useEditorStore.setState({ model: stored });
   }

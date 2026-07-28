@@ -31,6 +31,8 @@ import {
 } from "@/lib/projects";
 import { useEditorStore } from "@/lib/store";
 import type { Word } from "@/lib/types";
+import { SPEECH_ANALYZER_INFO } from "@/lib/models";
+import { useSpeechAnalyzerAvailability } from "@/hooks/useSpeechAnalyzer";
 
 // The three media cards that stand in for the upload icon. Each carries its
 // resting transform plus the fanned-out one, applied either on hover (via the
@@ -168,6 +170,15 @@ export default function UploadScreen({
   const pendingTranscript = useEditorStore((s) => s.pendingTranscript);
   const openProject = useEditorStore((s) => s.openProject);
   const removeProject = useEditorStore((s) => s.removeProject);
+  const speechAnalyzer = useSpeechAnalyzerAvailability();
+  const showSpeechAnalyzer = speechAnalyzer.status === "available";
+  const setModel = useEditorStore((s) => s.setModel);
+
+  useEffect(() => {
+    if (speechAnalyzer.status === "unavailable" && model === "speechanalyzer") {
+      setModel("base");
+    }
+  }, [speechAnalyzer.status, model, setModel]);
 
   const refreshProjects = useCallback(async () => {
     try {
@@ -269,6 +280,20 @@ export default function UploadScreen({
           <ModelSelector groupLabel="Transcript source">
             <ModelOption id="base" />
             <ModelOption id="small" />
+            {showSpeechAnalyzer && (
+              <>
+                <ModelOptionSeparator />
+                <ModelOption
+                  id="speechanalyzer"
+                  label={SPEECH_ANALYZER_INFO.label}
+                  meta={SPEECH_ANALYZER_INFO.size}
+                >
+                  <span className="pl-[1.625rem] text-[11px] leading-snug text-zinc-400">
+                    {SPEECH_ANALYZER_INFO.description}
+                  </span>
+                </ModelOption>
+              </>
+            )}
             <ModelOptionSeparator />
             <ImportTranscriptOption />
           </ModelSelector>
@@ -335,7 +360,9 @@ export default function UploadScreen({
                   ? pendingTranscript
                     ? `Will use ${pendingTranscript.name} · MP4, WebM, MOV, MP3, WAV, …`
                     : "Pick a transcript in the menu above, then drop your media"
-                  : "MP4, WebM, MOV, MP3, WAV, M4A, …"}
+                  : model === "speechanalyzer"
+                    ? "Transcribes on-device with Apple SpeechAnalyzer · MP4, WebM, MOV, MP3, WAV, …"
+                    : "MP4, WebM, MOV, MP3, WAV, M4A, …"}
               </p>
             </>
           ) : (
