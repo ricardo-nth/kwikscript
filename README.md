@@ -20,6 +20,7 @@ the media. Export the final cut — without your file ever leaving your device.
 - 🔒 **Private by design** — no server, no auth, no uploads; all media processing happens on-device
 - 📝 **Word-level editing** — select words, press ⌫, the cut follows the text
 - 📥 **Import your own transcript** — skip Whisper and edit with an SRT, VTT, or JSON caption file
+- 📤 **Export the transcript** — download SRT, WebVTT, or JSON (captions follow your cuts)
 - 🧹 **Filler removal** — one-click cut of "um", "uh", and similar fillers
 - 🗣️ **Speaker diarization** — the transcript is grouped by speaker
 - 🎬 **Timeline** — waveform, word labels, cut regions, playhead, zoom

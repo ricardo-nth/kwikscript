@@ -1,7 +1,17 @@
 "use client";
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, EyeOff, FileText, Pencil, RotateCcw, Scissors, WandSparkles, X } from "lucide-react";
+import {
+  Download,
+  Eye,
+  EyeOff,
+  FileText,
+  Pencil,
+  RotateCcw,
+  Scissors,
+  WandSparkles,
+  X,
+} from "lucide-react";
 import { useEditorStore } from "@/lib/store";
 import { findFillerWordIds } from "@/lib/fillers";
 import {
@@ -9,6 +19,10 @@ import {
   parseTranscriptFile,
   TRANSCRIPT_ACCEPT,
 } from "@/lib/parseTranscript";
+import {
+  downloadTranscript,
+  type TranscriptFormat,
+} from "@/lib/serializeTranscript";
 import type { SpeakerTurn, Word } from "@/lib/types";
 
 export const SPEAKER_COLORS = [
@@ -89,11 +103,15 @@ export default function TranscriptPanel() {
   const correctWords = useEditorStore((s) => s.correctWords);
   const importWords = useEditorStore((s) => s.importWords);
   const playing = useEditorStore((s) => s.playing);
+  const videoFile = useEditorStore((s) => s.videoFile);
+  const duration = useEditorStore((s) => s.duration);
   const activeWordId = useEditorStore((s) => findActiveWordId(s.words, s.currentTime));
 
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [correcting, setCorrecting] = useState<{
     ids: number[];
@@ -147,6 +165,34 @@ export default function TranscriptPanel() {
     },
     [words.length, importWords]
   );
+
+  const handleExportTranscript = useCallback(
+    (format: TranscriptFormat) => {
+      if (words.length === 0) return;
+      const base = videoFile
+        ? videoFile.name.replace(/\.[^.]+$/, "")
+        : "transcript";
+      try {
+        downloadTranscript(words, format, base, { duration });
+        setExportMenuOpen(false);
+      } catch (err) {
+        console.error(err);
+        alert(err instanceof Error ? err.message : "Could not export transcript.");
+      }
+    },
+    [words, videoFile, duration]
+  );
+
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (!exportMenuRef.current?.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [exportMenuOpen]);
 
   const seekToWord = useCallback((word: Word) => {
     const { videoEl, setCurrentTime } = useEditorStore.getState();
@@ -351,6 +397,37 @@ export default function TranscriptPanel() {
                 }}
               />
             </>
+          )}
+          {status === "ready" && words.length > 0 && (
+            <div ref={exportMenuRef} className="relative">
+              <button
+                onClick={() => setExportMenuOpen((o) => !o)}
+                title="Export transcript as SRT, VTT, or JSON"
+                className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100"
+              >
+                <Download size={14} />
+                <span className="hidden sm:inline">Export</span>
+              </button>
+              {exportMenuOpen && (
+                <div className="absolute right-0 top-full z-30 mt-1 min-w-[9.5rem] rounded-xl border border-zinc-200 bg-white py-1 shadow-lg shadow-zinc-900/10">
+                  {(
+                    [
+                      { format: "srt", label: "SRT" },
+                      { format: "vtt", label: "WebVTT" },
+                      { format: "json", label: "JSON" },
+                    ] as const
+                  ).map(({ format, label }) => (
+                    <button
+                      key={format}
+                      onClick={() => handleExportTranscript(format)}
+                      className="flex w-full items-center px-3 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-50"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           <button
             onClick={toggleShowDeleted}

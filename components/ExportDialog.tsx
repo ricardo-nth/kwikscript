@@ -5,6 +5,16 @@ import { Download, X } from "lucide-react";
 import { useEditorStore } from "@/lib/store";
 import { formatTime, getCutRanges, getEditedDuration, getKeepRanges } from "@/lib/edits";
 import { exportAudio, exportVideo } from "@/lib/ffmpeg";
+import {
+  downloadTranscript,
+  type TranscriptFormat,
+} from "@/lib/serializeTranscript";
+
+const TRANSCRIPT_FORMATS: { format: TranscriptFormat; label: string }[] = [
+  { format: "srt", label: "SRT" },
+  { format: "vtt", label: "VTT" },
+  { format: "json", label: "JSON" },
+];
 
 export default function ExportDialog() {
   const open = useEditorStore((s) => s.exportOpen);
@@ -28,9 +38,10 @@ export default function ExportDialog() {
   const ext = isAudio ? "m4a" : "mp4";
   const formatLabel = isAudio ? "M4A" : "MP4";
 
-  const fileName = videoFile
-    ? videoFile.name.replace(/\.[^.]+$/, "") + `.edited.${ext}`
-    : `edited.${ext}`;
+  const baseName = videoFile
+    ? videoFile.name.replace(/\.[^.]+$/, "")
+    : "edited";
+  const fileName = `${baseName}.edited.${ext}`;
 
   const start = useCallback(async () => {
     if (!videoFile) return;
@@ -51,6 +62,18 @@ export default function ExportDialog() {
       setStatus("ready");
     }
   }, [videoFile, isAudio, cuts, duration, editedDuration, setStatus, setExportUrl]);
+
+  const exportCaption = useCallback(
+    (format: TranscriptFormat) => {
+      if (words.length === 0) return;
+      try {
+        downloadTranscript(words, format, baseName, { duration });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Transcript export failed.");
+      }
+    },
+    [words, baseName, duration]
+  );
 
   if (!open) return null;
 
@@ -142,6 +165,30 @@ export default function ExportDialog() {
             <Download size={15} />
             Export {formatLabel}
           </button>
+        )}
+
+        {words.length > 0 && !exporting && (
+          <div className="mt-5 border-t border-zinc-100 pt-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Transcript
+            </p>
+            <p className="mb-3 text-xs text-zinc-500">
+              SRT and VTT use the edited timeline (cuts applied). JSON keeps the
+              full word list for re-import.
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {TRANSCRIPT_FORMATS.map(({ format, label }) => (
+                <button
+                  key={format}
+                  onClick={() => exportCaption(format)}
+                  className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+                >
+                  <Download size={13} className="shrink-0 text-zinc-400" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
