@@ -111,7 +111,7 @@ export default function ImportTranscriptOption() {
       <ModelOption
         id="import"
         label="Import transcript"
-        meta="SRT / VTT / JSON"
+        meta="SRT / VTT / JSON / TXT"
         icon={FileText}
         autoTrigger={false}
         onSelect={(ctx) => {
@@ -157,7 +157,7 @@ export default function ImportTranscriptOption() {
             }
             if (!isTranscriptFile(file)) {
               setPicking(false);
-              setError("Choose an SRT, VTT, or JSON file.");
+              setError("Choose an SRT, VTT, JSON, or TXT file.");
               setPendingTranscript(null);
               setModel("import");
               menu?.keepMenuOpen();
@@ -168,9 +168,21 @@ export default function ImportTranscriptOption() {
             setError(null);
             setModel("import"); // so the closed trigger can show progress
             try {
-              const words = await parseTranscriptFile(file);
+              const parsed = await parseTranscriptFile(file);
               if (pickGenRef.current !== gen) return;
-              setPendingTranscript({ name: file.name, words });
+              if (parsed.kind === "timed") {
+                setPendingTranscript({
+                  name: file.name,
+                  kind: "timed",
+                  words: parsed.words,
+                });
+              } else {
+                setPendingTranscript({
+                  name: file.name,
+                  kind: "untimed",
+                  tokens: parsed.tokens,
+                });
+              }
               setModel("import");
               menu?.closeMenu();
             } catch (err) {
@@ -245,9 +257,11 @@ function ImportStatus({
       ) : error ? (
         error
       ) : pendingTranscript ? (
-        `${pendingTranscript.name} · ${pendingTranscript.words.length} words`
+        pendingTranscript.kind === "timed"
+          ? `${pendingTranscript.name} · ${pendingTranscript.words.length} words`
+          : `${pendingTranscript.name} · ${pendingTranscript.tokens.length} words · syncs to audio`
       ) : picking ? (
-        "Choose an SRT, VTT, or JSON file…"
+        "Choose an SRT, VTT, JSON, or TXT file…"
       ) : null}
     </span>
   );

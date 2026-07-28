@@ -128,7 +128,7 @@ export default function TranscriptPanel() {
       const file = files?.[0];
       if (!file) return;
       if (!isTranscriptFile(file)) {
-        alert("Please choose an SRT, VTT, or JSON transcript.");
+        alert("Please choose an SRT, VTT, JSON, or TXT transcript.");
         return;
       }
       if (
@@ -138,8 +138,34 @@ export default function TranscriptPanel() {
         return;
       }
       try {
-        const imported = await parseTranscriptFile(file);
-        importWords(imported);
+        const parsed = await parseTranscriptFile(file);
+        if (parsed.kind === "timed") {
+          importWords(parsed.words);
+          return;
+        }
+        // Plain text (Descript-style): align to existing timings when we have
+        // them; otherwise run Whisper and sync the reference text onto it.
+        const state = useEditorStore.getState();
+        if (state.words.length > 0) {
+          const { alignTranscript } = await import("@/lib/alignTranscript");
+          const aligned = alignTranscript(
+            parsed.tokens,
+            state.words,
+            state.duration
+          );
+          importWords(aligned);
+          return;
+        }
+        if (!state.audio) {
+          alert("Wait for the media to finish loading, then try again.");
+          return;
+        }
+        state.setSyncTokens(parsed.tokens);
+        const { startTranscription } = await import("@/hooks/useTranscriber");
+        startTranscription(
+          state.audio,
+          state.duration || state.audio.length / 16000
+        );
       } catch (err) {
         console.error(err);
         alert(err instanceof Error ? err.message : "Could not read that transcript.");
@@ -333,7 +359,7 @@ export default function TranscriptPanel() {
             <>
               <button
                 onClick={() => importInputRef.current?.click()}
-                title="Replace transcript from SRT, VTT, or JSON"
+                title="Replace transcript from SRT, VTT, JSON, or TXT"
                 className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100"
               >
                 <FileText size={14} />
