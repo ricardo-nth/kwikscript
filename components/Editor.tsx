@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import { useEditorStore } from "@/lib/store";
 import { extractAudio, getFFmpeg } from "@/lib/ffmpeg";
 import { useTranscriber } from "@/hooks/useTranscriber";
@@ -10,6 +11,108 @@ import TranscriptPanel from "./TranscriptPanel";
 import MediaPreview from "./MediaPreview";
 import Timeline from "./Timeline";
 import ExportDialog from "./ExportDialog";
+import SocialLinks from "./SocialLinks";
+import { Download, Redo2, Undo2 } from "lucide-react";
+import { ModelOption, ModelOptionSeparator } from "./ModelSelector";
+import ModelSelector from "./ModelSelector";
+import ImportTranscriptOption from "./ImportTranscriptOption";
+import LogoLoader from "./LogoLoader";
+
+/** How long the desktop mode-change overlay stays up. Matches the macOS
+ *  `setBounds(..., animate)` duration plus a small buffer so the layout
+ *  underneath isn't revealed mid-resize. */
+const WINDOW_MODE_OVERLAY_MS = 380;
+
+/** Matches Tailwind `lg` — below this the panes stack vertically. */
+const DESKTOP_MQ = "(min-width: 1024px)";
+
+function useIsDesktopLayout() {
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(DESKTOP_MQ).matches : true
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP_MQ);
+    const onChange = () => setIsDesktop(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isDesktop;
+}
+
+/** Transcript and preview split, resizable in both orientations. Wide screens
+ *  put the transcript first (left of the preview); stacked screens lead with
+ *  the preview on top. Each orientation remembers its own sizes. */
+function SplitWorkspace({ orientation }: { orientation: "horizontal" | "vertical" }) {
+  const horizontal = orientation === "horizontal";
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: `editor-workspace-${orientation}`,
+    storage: typeof window !== "undefined" ? localStorage : undefined,
+  });
+
+  const preview = (
+    <Panel
+      id="media"
+      defaultSize={horizontal ? "44%" : "34vh"}
+      minSize={horizontal ? 320 : 140}
+      className="flex min-h-0 min-w-0 flex-col"
+    >
+      <MediaPreview />
+    </Panel>
+  );
+  const transcript = (
+    <Panel
+      id="transcript"
+      defaultSize={horizontal ? "56%" : "66%"}
+      minSize={horizontal ? "20%" : 160}
+      className="flex min-h-0 min-w-0 flex-col"
+    >
+      <TranscriptPanel />
+    </Panel>
+  );
+  const separator = (
+    <Separator
+      className={`${horizontal ? "w-px" : "h-px"} bg-zinc-200 outline-none transition-colors hover:bg-zinc-300 data-[separator=active]:bg-zinc-400 data-[separator=focus]:bg-zinc-400`}
+    />
+  );
+
+  return (
+    <Group
+      orientation={orientation}
+      className="min-h-0 flex-1"
+      defaultLayout={defaultLayout}
+      onLayoutChanged={onLayoutChanged}
+      // The hairline divider is too small to hit with a finger; widen the
+      // touch target well past its visual size.
+      resizeTargetMinimumSize={{ coarse: 32, fine: 10 }}
+    >
+      {horizontal ? (
+        <>
+          {transcript}
+          {separator}
+          {preview}
+        </>
+      ) : (
+        <>
+          {preview}
+          {separator}
+          {transcript}
+        </>
+      )}
+    </Group>
+  );
+}
+
+function EditorWorkspace() {
+  const isDesktop = useIsDesktopLayout();
+  // Keyed so crossing the breakpoint remounts the group and restores that
+  // orientation's saved layout instead of carrying sizes across.
+  return isDesktop ? (
+    <SplitWorkspace key="horizontal" orientation="horizontal" />
+  ) : (
+    <SplitWorkspace key="vertical" orientation="vertical" />
+  );
+}
 
 export default function Editor() {
   const status = useEditorStore((s) => s.status);
@@ -17,6 +120,16 @@ export default function Editor() {
   const skipTranscription = useEditorStore((s) => s.skipTranscription);
   const loadVideo = useEditorStore((s) => s.loadVideo);
   const { transcribe } = useTranscriber();
+
+  const canUndo = useEditorStore((s) => s.past.length > 0);
+  const canRedo = useEditorStore((s) => s.future.length > 0);
+  const undo = useEditorStore((s) => s.undo);
+  const redo = useEditorStore((s) => s.redo);
+  const setExportOpen = useEditorStore((s) => s.setExportOpen);
+
+  const isElectron = /electron/i.test(navigator.userAgent);
+  const [modeTransitioning, setModeTransitioning] = useState(false);
+  const wasIdle = useRef(status === "idle");
 
   // Processing pipeline: load ffmpeg -> extract audio -> (maybe) transcribe.
   // Restored projects already have words; they only need PCM for the waveform.
@@ -46,7 +159,21 @@ export default function Editor() {
     })();
   }, [videoFile, skipTranscription, transcribe]);
 
-  // Global shortcuts: space = play/pause, ⌘Z / ⇧⌘Z = undo / redo.
+  // The desktop shell opens as a small upload window and grows once the
+  // three-pane editor takes over (and shrinks back on "start over").
+  // Cover the swap with a brief overlay so the layout reflow isn't visible
+  // while the window animates between sizes.
+  useEffect(() => {
+    const idle = status === "idle";
+    window.rescriptDesktop?.setWindowMode(idle ? "compact" : "expanded");
+    if (!isElectron || wasIdle.current === idle) return;
+    wasIdle.current = idle;
+    setModeTransitioning(true);
+    const timer = window.setTimeout(() => setModeTransitioning(false), WINDOW_MODE_OVERLAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [status, isElectron]);
+
+  // Global shortcuts: space = play/pause, ⌘Z / ⇧⌘Z = undo / redo, S = split.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -61,6 +188,16 @@ export default function Editor() {
         e.preventDefault();
         if (e.shiftKey) s.redo();
         else s.undo();
+      } else if (
+        e.key.toLowerCase() === "s" &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        s.status === "ready" &&
+        !s.exportOpen
+      ) {
+        e.preventDefault();
+        s.splitAtPlayhead();
       }
     };
     document.addEventListener("keydown", handler);
@@ -84,23 +221,63 @@ export default function Editor() {
   }, []);
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-zinc-50 text-zinc-900">
+    <div className="relative flex h-dvh flex-col overflow-hidden bg-zinc-50 text-zinc-900">
       {status === "idle" ? (
-        <UploadScreen onFile={loadVideo} />
+        <>
+          {isElectron && <TopBar>
+            <ModelSelector groupLabel="Transcript source">
+              <ModelOption id="base" />
+              <ModelOption id="small" />
+              <ModelOptionSeparator />
+              <ImportTranscriptOption />
+            </ModelSelector>
+          </TopBar>}
+          <UploadScreen onFile={loadVideo} />
+        </>
       ) : (
         <>
-          <TopBar />
-          <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-            <div className="order-1 flex h-[34vh] shrink-0 flex-col border-b border-zinc-200 lg:order-2 lg:h-auto lg:w-[44%] lg:min-w-[320px] lg:border-b-0 lg:border-l">
-              <MediaPreview />
-            </div>
-            <div className="order-2 flex min-h-0 flex-1 lg:order-1">
-              <TranscriptPanel />
-            </div>
-            {/* <SideRail /> — hidden until the tools it exposes are functional */}
-          </div>
+          <TopBar>
+            <SocialLinks />
+            <div className="mx-1 h-5 w-px bg-zinc-200" />
+            <button
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo (⌘Z)"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <Undo2 size={16} />
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo}
+              title="Redo (⇧⌘Z)"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <Redo2 size={16} />
+            </button>
+            <div className="mx-1 h-5 w-px bg-zinc-200" />
+            <button
+              onClick={() => setExportOpen(true)}
+              disabled={status !== "ready" && status !== "exporting"}
+              className="flex ml-1 h-8 items-center gap-1.5 rounded-full bg-zinc-900 px-4 text-[13px] font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Download size={14} />
+              Export
+            </button>
+          </TopBar>
+          <EditorWorkspace />
+          {/* <SideRail /> — hidden until the tools it exposes are functional */}
           <Timeline />
         </>
+      )}
+      {modeTransitioning && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-zinc-50"
+          aria-busy="true"
+          aria-live="polite"
+        >
+          <LogoLoader size={44} />
+        </div>
       )}
       <ExportDialog />
     </div>

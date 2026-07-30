@@ -22,6 +22,7 @@ export default function ExportDialog() {
   const videoFile = useEditorStore((s) => s.videoFile);
   const mediaKind = useEditorStore((s) => s.mediaKind);
   const words = useEditorStore((s) => s.words);
+  const manualCuts = useEditorStore((s) => s.manualCuts);
   const duration = useEditorStore((s) => s.duration);
   const status = useEditorStore((s) => s.status);
   const setStatus = useEditorStore((s) => s.setStatus);
@@ -31,7 +32,10 @@ export default function ExportDialog() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const cuts = useMemo(() => getCutRanges(words, duration), [words, duration]);
+  const cuts = useMemo(
+    () => getCutRanges(words, duration, manualCuts),
+    [words, duration, manualCuts]
+  );
   const editedDuration = useMemo(() => getEditedDuration(cuts, duration), [cuts, duration]);
   const exporting = status === "exporting";
   const isAudio = mediaKind === "audio";
@@ -77,9 +81,11 @@ export default function ExportDialog() {
 
   if (!open) return null;
 
+  // app-no-drag: the backdrop covers the draggable top bar, so it needs to take
+  // clicks (dismiss) rather than letting them move the window.
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 p-4 backdrop-blur-sm"
+      className="app-no-drag fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 p-4 backdrop-blur-sm"
       onClick={() => !exporting && setOpen(false)}
     >
       <div
