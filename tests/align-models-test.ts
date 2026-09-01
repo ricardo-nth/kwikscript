@@ -13,6 +13,8 @@ function assert(cond: boolean, msg: string) {
   assert(alignModelFor("es")?.id === ALIGN_MODELS.es!.id, "es has an aligner");
   assert(alignModelFor("fr")?.normalize === "latin-lower", "fr uses MMS folding");
   assert(alignModelFor("de")?.id === alignModelFor("es")?.id, "eu langs share MMS");
+  assert(alignModelFor("pt")?.id === alignModelFor("es")?.id, "pt shares MMS");
+  assert(alignModelFor("pt")?.normalize === "latin-lower", "pt uses MMS folding");
   assert(alignModelFor("zh")?.normalize === "cjk", "zh uses CJK normalize");
   assert(alignModelFor("en")?.normalize === "latin-upper", "en stays uppercase");
   assert(alignModelFor(undefined) === null, "missing language → no CTC");

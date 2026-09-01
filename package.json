@@ -145,7 +145,8 @@
         "ko_KR",
         "es_ES",
         "fr_FR",
-        "de_DE"
+        "de_DE",
+        "pt_BR"
       ],
       "multiLanguageInstaller": true,
       "artifactName": "${productName}-Setup.${ext}"

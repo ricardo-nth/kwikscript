@@ -27,6 +27,13 @@ function w(text: string, id: number, deleted = false): Word {
 }
 
 {
+  const portugueseFillers = ["hã", "Ahn,", "ãhm", "éhh"];
+  for (const word of portugueseFillers) {
+    if (!isFillerWord(word)) throw new Error(`expected ${word} to be a filler`);
+  }
+}
+
+{
   const chineseFillers = ["嗯", "呃", "额", "唔", "嗯嗯"];
   for (const word of chineseFillers) {
     if (!isFillerWord(word)) throw new Error(`expected ${word} to be a filler`);
@@ -34,7 +41,7 @@ function w(text: string, id: number, deleted = false): Word {
 }
 
 {
-  const meaningfulWords = ["also", "genau", "ja", "bonjour", "hola", "这个"];
+  const meaningfulWords = ["also", "genau", "ja", "bonjour", "hola", "olá", "这个"];
   for (const word of meaningfulWords) {
     if (isFillerWord(word)) throw new Error(`did not expect ${word} to be a filler`);
   }

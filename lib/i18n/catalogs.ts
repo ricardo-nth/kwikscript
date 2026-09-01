@@ -4,6 +4,7 @@ import { es } from "./messages/es";
 import { fr } from "./messages/fr";
 import { ja } from "./messages/ja";
 import { ko } from "./messages/ko";
+import { pt } from "./messages/pt";
 import { zhCN } from "./messages/zh-CN";
 import { zhTW } from "./messages/zh-TW";
 import type { UiLocale } from "./locales";
@@ -19,4 +20,5 @@ export const catalogs: Record<UiLocale, MessageCatalog> = {
   es,
   fr,
   de,
+  pt,
 };

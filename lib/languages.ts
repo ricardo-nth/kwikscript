@@ -1,4 +1,4 @@
-export type TranscriptLanguage = "en" | "es" | "fr" | "de" | "zh";
+export type TranscriptLanguage = "en" | "es" | "fr" | "de" | "pt" | "zh";
 
 export interface TranscriptLanguageInfo {
   label: string;
@@ -41,6 +41,12 @@ export const TRANSCRIPT_LANGUAGES: Record<
     flag: "🇩🇪",
     code: "DE",
   },
+  pt: {
+    label: "Portuguese",
+    nativeLabel: "Português",
+    flag: "🇧🇷",
+    code: "PT",
+  },
   zh: {
     label: "Chinese",
     nativeLabel: "中文",
@@ -54,6 +60,7 @@ export const TRANSCRIPT_LANGUAGE_ORDER: TranscriptLanguage[] = [
   "es",
   "fr",
   "de",
+  "pt",
   "zh",
 ];
 
@@ -65,6 +72,7 @@ export function isTranscriptLanguage(
     value === "es" ||
     value === "fr" ||
     value === "de" ||
+    value === "pt" ||
     value === "zh"
   );
 }

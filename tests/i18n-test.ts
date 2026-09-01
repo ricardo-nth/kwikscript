@@ -26,8 +26,10 @@ assert(resolveUiLocale("system", ["ko"]) === "ko", "korean detection");
 assert(resolveUiLocale("system", ["es-MX"]) === "es", "spanish detection");
 assert(resolveUiLocale("system", ["fr-CA"]) === "fr", "french detection");
 assert(resolveUiLocale("system", ["de-AT"]) === "de", "german detection");
+assert(resolveUiLocale("system", ["pt-BR"]) === "pt", "portuguese detection");
+assert(resolveUiLocale("system", ["pt-PT", "en-US"]) === "pt", "portuguese ordered");
 assert(resolveUiLocale("system", ["fr-FR", "en-US"]) === "fr", "ordered fallback");
-assert(resolveUiLocale("system", ["pt-BR", "en-US"]) === "en", "unsupported then en");
+assert(resolveUiLocale("system", ["xx-YY", "en-US"]) === "en", "unsupported then en");
 assert(resolveUiLocale("system", []) === "en", "empty fallback");
 assert(resolveUiLocale("ja", ["en-US"]) === "ja", "manual override");
 assert(matchUiLocale("zh_TW") === "zh-TW", "underscore normalized");
@@ -35,6 +37,7 @@ assert(matchUiLocale("zh_TW") === "zh-TW", "underscore normalized");
 assert(translate("zh-CN", "common.settings") === "设置", "Chinese settings");
 assert(translate("ja", "common.settings") === "設定", "Japanese settings");
 assert(translate("es", "common.settings") === "Ajustes", "Spanish settings");
+assert(translate("pt", "common.settings") === "Configurações", "Portuguese settings");
 assert(
   translate("de", "export.downloadFile", { name: "demo.mp4" }).includes("demo.mp4"),
   "named interpolation"
@@ -76,14 +79,15 @@ for (const locale of UI_LOCALES) {
   }
 }
 
+const nsis = nsisInstallerLanguages();
+assert(nsis.includes("en_US") && nsis.includes("ja_JP") && nsis.includes("zh_TW"), "nsis codes");
+assert(nsis.includes("pt_BR"), "nsis includes Portuguese");
+
 const boot = buildLocaleBootScript();
 assert(boot.includes("zh-TW"), "boot script knows Traditional Chinese");
 assert(boot.includes("ja"), "boot script knows Japanese");
+assert(boot.includes("pt"), "boot script knows Portuguese");
 assert(boot.includes("navigator.languages"), "boot script reads system languages");
-
-const nsis = nsisInstallerLanguages();
-assert(nsis.includes("en_US") && nsis.includes("ja_JP") && nsis.includes("zh_TW"), "nsis codes");
-
 const now = Date.UTC(2026, 7, 9, 12, 0, 0);
 assert(formatRelativeTime("ja", now - 5 * 60_000, now).includes("5"), "ja relative");
 assert(formatRelativeTime("en", now - 5 * 60_000, now).includes("5"), "en relative");

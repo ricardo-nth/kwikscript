@@ -14,6 +14,7 @@ export const UI_LOCALES = [
   "es",
   "fr",
   "de",
+  "pt",
 ] as const;
 
 export type UiLocale = (typeof UI_LOCALES)[number];
@@ -92,6 +93,12 @@ export const UI_LOCALE_META: Record<UiLocale, UiLocaleMeta> = {
     nsis: "de_DE",
     match: prefix("de"),
   },
+  pt: {
+    htmlLang: "pt",
+    nativeLabel: "Português",
+    nsis: "pt_BR",
+    match: prefix("pt"),
+  },
 };
 
 function isTraditionalChinese(tag: string): boolean {
@@ -111,6 +118,7 @@ const MATCH_ORDER: readonly UiLocale[] = [
   "es",
   "fr",
   "de",
+  "pt",
   "en",
 ];
 

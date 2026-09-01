@@ -43,6 +43,16 @@ const FILLER_WORDS = new Set([
   "emm",
   "emmm",
   "eee",
+  // Portuguese
+  "hã",
+  "hãhã",
+  "ahn",
+  "ahnn",
+  "ãh",
+  "ãhh",
+  "ãhm",
+  "éh",
+  "éhh",
   // Chinese
   "嗯",
   "嗯嗯",

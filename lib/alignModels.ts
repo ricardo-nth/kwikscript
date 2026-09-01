@@ -36,6 +36,10 @@ export const ALIGN_MODELS: Partial<
     id: "onnx-community/mms-300m-1130-forced-aligner-ONNX",
     normalize: "latin-lower",
   },
+  pt: {
+    id: "onnx-community/mms-300m-1130-forced-aligner-ONNX",
+    normalize: "latin-lower",
+  },
   zh: {
     id: "onnx-community/wav2vec2-large-xlsr-53-chinese-zh-cn-ONNX",
     normalize: "cjk",
