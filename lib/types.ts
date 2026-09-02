@@ -27,6 +27,8 @@ export interface ManualCut {
   id: number;
   start: number;
   end: number;
+  /** The bulk tool that owns this cut, when it should be independently reversible. */
+  source?: "silence";
 }
 
 /**

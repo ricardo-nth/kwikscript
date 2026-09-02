@@ -23,13 +23,40 @@ export function findSilenceCuts(
   words: Word[],
   manualCuts: ManualCut[]
 ): TimeRange[] {
-  return manualCuts
+  const owned = manualCuts.filter((cut) => cut.source === "silence");
+  const candidates = owned.length > 0 ? owned : manualCuts;
+  return candidates
     .filter(
       (c) =>
         c.end - c.start > 1e-4 &&
         !words.some((w) => w.end > c.start + 1e-4 && w.start < c.end - 1e-4)
     )
     .map((c) => ({ start: c.start, end: c.end }));
+}
+
+/** Add independently reversible silence-cleanup cuts without merging ownership. */
+export function addSilenceCuts(
+  manualCuts: ManualCut[],
+  ranges: TimeRange[],
+  nextId: number
+): { cuts: ManualCut[]; nextId: number } {
+  const added: ManualCut[] = [];
+  let id = nextId;
+  for (const range of ranges) {
+    if (range.end - range.start <= 1e-4) continue;
+    added.push({ id: id++, start: range.start, end: range.end, source: "silence" });
+  }
+  return {
+    cuts: [...manualCuts, ...added].sort(
+      (left, right) => left.start - right.start || left.end - right.end
+    ),
+    nextId: id,
+  };
+}
+
+/** Remove only cuts created by silence cleanup, leaving manual edits intact. */
+export function removeOwnedSilenceCuts(manualCuts: ManualCut[]): ManualCut[] {
+  return manualCuts.filter((cut) => cut.source !== "silence");
 }
 
 /** Split `range` into the pieces not covered by any of `cuts`. */

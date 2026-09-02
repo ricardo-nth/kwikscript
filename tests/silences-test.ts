@@ -1,9 +1,13 @@
 import {
+  addSilenceCuts,
+  findSilenceCuts,
   findSilenceRanges,
   MIN_SILENCE_DURATION,
+  removeOwnedSilenceCuts,
   SILENCE_PAD,
 } from "../lib/silences";
 import type { ManualCut, Word } from "../lib/types";
+import { addManualCut } from "../lib/edits";
 
 function nearly(a: number, b: number, eps = 1e-4): boolean {
   return Math.abs(a - b) < eps;
@@ -137,6 +141,23 @@ function assert(cond: boolean, msg: string): void {
   const second = findSilenceRanges(words, 5.0, manual);
   assert(second.length === 0, `expected no remaining silences, got ${second.length}`);
   console.log("idempotent after cut: ok");
+}
+
+{
+  const words = [w(1, 0, 1), w(2, 2, 3)];
+  const manual: ManualCut[] = [{ id: 1, start: 0.2, end: 0.4 }];
+  const added = addSilenceCuts(manual, [{ start: 1, end: 2 }], 2);
+  assert(added.cuts.length === 2, "silence cut added separately");
+  assert(findSilenceCuts(words, added.cuts).length === 1, "owned silence found");
+  const restored = removeOwnedSilenceCuts(added.cuts);
+  assert(restored.length === 1 && restored[0]!.id === 1, "manual cut preserved");
+  const overlapped = addManualCut(added.cuts, 1.5, 2.5, added.nextId);
+  assert(
+    overlapped.cuts.some((cut) => cut.source === "silence") &&
+      overlapped.cuts.some((cut) => cut.source !== "silence"),
+    "later manual trim does not erase silence ownership"
+  );
+  console.log("owned silence restore: ok");
 }
 
 console.log("ALL SILENCE TESTS PASSED");

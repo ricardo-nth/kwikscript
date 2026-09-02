@@ -15,6 +15,13 @@ const CHECK_INTERVAL_MS = 60 * 60 * 1000; // hourly
 export function initAutoUpdater(): void {
   if (!app.isPackaged) return;
 
+  // Custom/local builds use their own product name and must not replace
+  // themselves with an official upstream release on the next update check.
+  if (app.getName() !== "rescript") {
+    log.info(`[updater] disabled for custom build ${app.getName()}`);
+    return;
+  }
+
   autoUpdater.logger = log;
   log.transports.file.level = "info";
   autoUpdater.autoDownload = true;

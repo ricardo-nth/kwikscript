@@ -82,6 +82,7 @@ import {
 } from "@/lib/vad";
 import { isNetworkError, installFetchRetry } from "@/lib/network";
 import { isWebGpuDeviceLostError } from "@/lib/webgpu";
+import { shouldRetryEmptyParakeetSegment } from "@/lib/parakeetRecovery";
 
 /**
  * Weight downloads are the longest-running fetches in the app (over a gigabyte
@@ -1165,11 +1166,9 @@ async function runParakeet(
     try {
       result = await runSlice();
     } catch (err) {
-      if (asrDevice !== "webgpu" || !isWebGpuDeviceLostError(err)) {
-        throw err;
-      }
+      if (asrDevice !== "webgpu") throw err;
       console.warn(
-        "WebGPU lost during Parakeet transcription; reloading on WASM.",
+        "Parakeet WebGPU segment failed; reloading on WASM.",
         err
       );
       await fallbackAsrToWasm();
@@ -1177,9 +1176,34 @@ async function runParakeet(
       result = await runSlice();
     }
 
-    rawWords.push(
-      ...wordsFromParakeet(result.words ?? [], offsetS, sliceDuration, duration)
+    if (
+      shouldRetryEmptyParakeetSegment(
+        asrDevice,
+        result.words?.length ?? 0,
+        sliceDuration
+      )
+    ) {
+      console.warn(
+        `[asr] parakeet: WebGPU segment ${offsetS.toFixed(2)}s +${sliceDuration.toFixed(2)}s ` +
+          "returned no words; retrying on WASM."
+      );
+      await fallbackAsrToWasm();
+      model = await getParakeet();
+      result = await runSlice();
+    }
+
+    const words = wordsFromParakeet(
+      result.words ?? [],
+      offsetS,
+      sliceDuration,
+      duration
     );
+    if (words.length === 0) {
+      console.warn(
+        `[asr] parakeet: segment ${offsetS.toFixed(2)}s +${sliceDuration.toFixed(2)}s produced no words.`
+      );
+    }
+    rawWords.push(...words);
     const piece = (result.utterance_text ?? "").trim();
     if (piece) {
       partial = partial ? `${partial} ${piece}` : piece;

@@ -403,20 +403,30 @@ export function addManualCut(
   nextId: number
 ): { cuts: ManualCut[]; nextId: number } {
   if (end - start < 1e-4) return { cuts: manualCuts, nextId };
+  // Silence cleanup cuts remain separate even when a later trim overlaps them.
+  // getCutRanges() still merges their playback effect, while keeping enough
+  // ownership information for Restore Silences to leave the trim in place.
+  const silenceCuts = manualCuts.filter((cut) => cut.source === "silence");
+  const generalCuts = manualCuts.filter((cut) => cut.source !== "silence");
   const merged = mergeCutRanges(
-    [...manualCuts.map((c) => ({ start: c.start, end: c.end })), { start, end }],
+    [...generalCuts.map((c) => ({ start: c.start, end: c.end })), { start, end }],
     Number.POSITIVE_INFINITY
   );
   // Rebuild with stable-ish ids: keep old ids when a merged range covers an old cut's midpoint
   let id = nextId;
   const cuts: ManualCut[] = merged.map((r) => {
-    const existing = manualCuts.find(
+    const existing = generalCuts.find(
       (c) => c.start >= r.start - 1e-4 && c.end <= r.end + 1e-4
     );
     if (existing) return { id: existing.id, start: r.start, end: r.end };
     return { id: id++, start: r.start, end: r.end };
   });
-  return { cuts, nextId: id };
+  return {
+    cuts: [...silenceCuts, ...cuts].sort(
+      (left, right) => left.start - right.start || left.end - right.end
+    ),
+    nextId: id,
+  };
 }
 
 /**

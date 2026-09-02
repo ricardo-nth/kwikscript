@@ -54,6 +54,7 @@ import {
   replaceSpeaker as replaceSpeakerEntry,
   speakersFromWords,
 } from "./speakers";
+import { addSilenceCuts, removeOwnedSilenceCuts } from "./silences";
 
 interface PendingTranscript {
   name: string;
@@ -195,8 +196,12 @@ interface EditorState {
   restoreWords: (ids: number[]) => void;
   /** Cut arbitrary time ranges (e.g. detected silences) as manual cuts. */
   cutRanges: (ranges: TimeRange[]) => void;
+  /** Cut detected silences while retaining ownership for bulk restoration. */
+  cutSilenceRanges: (ranges: TimeRange[]) => void;
   /** Restore arbitrary cut ranges (manual cuts + covered deleted words). */
   restoreRanges: (ranges: TimeRange[]) => void;
+  /** Restore only cuts created by the silence-cleanup tool. */
+  restoreSilences: () => void;
   /** Cut the currently selected timeline clip out of the edited media. */
   deleteSelectedClip: () => boolean;
   /** Restore the currently selected cut range (deleted clip / silence). */
@@ -660,6 +665,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedWordIds: [],
     });
   },
+  cutSilenceRanges: (ranges) => {
+    const usable = ranges.filter((range) => range.end - range.start > 1e-4);
+    if (usable.length === 0) return;
+    const s = get();
+    const added = addSilenceCuts(s.manualCuts, usable, s.nextManualCutId);
+    pushEdit(get, set, {
+      manualCuts: added.cuts,
+      nextManualCutId: added.nextId,
+      selectedClipIndex: null,
+      selectedCutIndex: null,
+      selectedWordIds: [],
+    });
+  },
   restoreRanges: (ranges) => {
     const s = get();
     const result = restoreRangesResult(
@@ -673,6 +691,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       words: result.words,
       manualCuts: result.manualCuts,
       nextManualCutId: result.nextCutId,
+      selectedClipIndex: null,
+      selectedCutIndex: null,
+      selectedWordIds: [],
+    });
+  },
+  restoreSilences: () => {
+    const s = get();
+    if (!s.manualCuts.some((cut) => cut.source === "silence")) {
+      // Older saved projects predate cut ownership. Keep their best-effort
+      // restoration path so this update does not strand existing edits.
+      const legacyRanges = s.manualCuts
+        .filter(
+          (cut) =>
+            cut.end - cut.start > 1e-4 &&
+            !s.words.some(
+              (word) =>
+                word.end > cut.start + 1e-4 && word.start < cut.end - 1e-4
+            )
+        )
+        .map((cut) => ({ start: cut.start, end: cut.end }));
+      get().restoreRanges(legacyRanges);
+      return;
+    }
+    pushEdit(get, set, {
+      manualCuts: removeOwnedSilenceCuts(s.manualCuts),
       selectedClipIndex: null,
       selectedCutIndex: null,
       selectedWordIds: [],

@@ -32,7 +32,7 @@ type ToolContext = {
   silenceCuts: ReturnType<typeof findSilenceCuts>;
   deleteWords: (ids: number[]) => void;
   restoreWords: (ids: number[]) => void;
-  restoreRanges: (ranges: { start: number; end: number }[]) => void;
+  restoreSilences: () => void;
 };
 
 type ToolDef = {
@@ -68,7 +68,7 @@ const INSTANT_TOOLS: ToolDef[] = [
     titleKey: "tools.restoreSilencesTitle",
     Icon: Undo2,
     count: (ctx) => ctx.silenceCuts.length,
-    run: (ctx) => ctx.restoreRanges(ctx.silenceCuts),
+    run: (ctx) => ctx.restoreSilences(),
   },
 ];
 
@@ -161,8 +161,8 @@ export default function TranscriptToolsMenu() {
   const manualCuts = useEditorStore((state) => state.manualCuts);
   const deleteWords = useEditorStore((state) => state.deleteWords);
   const restoreWords = useEditorStore((state) => state.restoreWords);
-  const cutRanges = useEditorStore((state) => state.cutRanges);
-  const restoreRanges = useEditorStore((state) => state.restoreRanges);
+  const cutSilenceRanges = useEditorStore((state) => state.cutSilenceRanges);
+  const restoreSilences = useEditorStore((state) => state.restoreSilences);
 
   const [open, setOpen] = useState(false);
   const [preferences, setPreferences] = useState<SilencePreferences>(
@@ -214,9 +214,9 @@ export default function TranscriptToolsMenu() {
       silenceCuts: findSilenceCuts(words, manualCuts),
       deleteWords,
       restoreWords,
-      restoreRanges,
+      restoreSilences,
     }),
-    [words, manualCuts, deleteWords, restoreWords, restoreRanges]
+    [words, manualCuts, deleteWords, restoreWords, restoreSilences]
   );
 
   const availableInstantTools = useMemo(
@@ -428,7 +428,7 @@ export default function TranscriptToolsMenu() {
               type="button"
               disabled={silenceRanges.length === 0}
               onClick={() => {
-                cutRanges(silenceRanges);
+                cutSilenceRanges(silenceRanges);
                 setOpen(false);
               }}
               className="mt-3 flex h-8 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 text-[12px] font-medium text-white transition hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/45 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 dark:focus-visible:ring-offset-zinc-900 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600"
