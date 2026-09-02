@@ -1424,8 +1424,19 @@ async function runWhisper(
 }
 
 self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
-  const { audio, duration, model, language, detectSpeakers = false } = event.data;
+  const {
+    audio,
+    duration,
+    model,
+    language,
+    detectSpeakers = false,
+    preferMemorySavingAsr = false,
+  } = event.data;
   try {
+    // On an 8 GB Mac the fp16 Parakeet encoder cannot create its Metal session
+    // (roughly 1.3 GB plus Chromium/ORT overhead). Start directly on the cached
+    // int8 WASM model instead of allocating, failing, and then loading it anyway.
+    if (preferMemorySavingAsr) fallbackDevicePolicy.preferWasm();
     const choice: ModelId = model ?? "base";
     const transcriptLanguage: TranscriptLanguage = language ?? "en";
 

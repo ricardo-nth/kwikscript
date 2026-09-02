@@ -108,4 +108,6 @@ export interface WorkerRequest {
   language: import("./languages").TranscriptLanguage;
   /** Run the full-recording speaker model. Off by default for talking-head work. */
   detectSpeakers?: boolean;
+  /** Prefer smaller ASR weights on constrained desktop hardware. */
+  preferMemorySavingAsr?: boolean;
 }

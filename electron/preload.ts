@@ -4,6 +4,7 @@ import {
   webUtils,
   type IpcRendererEvent,
 } from "electron";
+import { totalmem } from "node:os";
 
 /**
  * Minimal bridge for the renderer. Rescript's UI is still a normal web
@@ -13,6 +14,7 @@ import {
  */
 contextBridge.exposeInMainWorld("rescriptDesktop", {
   platform: process.platform as NodeJS.Platform,
+  systemMemoryBytes: totalmem(),
   nativeMediaAvailable: ipcRenderer.sendSync("media:native-available") === true,
   versions: {
     electron: process.versions.electron,

@@ -45,6 +45,8 @@ export type MenuCommand =
 /** Desktop bridge exposed by electron/preload.ts when running inside Electron. */
 export interface RescriptDesktop {
   platform: NodeJS.Platform;
+  /** Physical memory reported by the host, used to avoid oversized GPU models. */
+  systemMemoryBytes: number;
   nativeMediaAvailable: boolean;
   versions: {
     electron: string;

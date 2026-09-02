@@ -8,6 +8,7 @@ import { useEditorStore } from "@/lib/store";
 import { trackEvent } from "@/lib/telemetry";
 import type { WorkerResponse } from "@/lib/types";
 import { loadSpeakerDetectionPreference } from "@/lib/speakerPreferences";
+import { shouldPreferMemorySavingAsr } from "@/lib/runtimeCapacity";
 
 let activeWorker: Worker | null = null;
 
@@ -37,6 +38,9 @@ export function useTranscriber() {
     const model = store.source;
     const transcriptLanguage = store.transcriptLanguage;
     const detectSpeakers = loadSpeakerDetectionPreference();
+    const preferMemorySavingAsr = shouldPreferMemorySavingAsr(
+      window.rescriptDesktop?.systemMemoryBytes
+    );
     store.setStatus("transcribing");
     store.setProgress({ message: en["progress.loadingSpeechModel"], value: null });
 
@@ -105,6 +109,7 @@ export function useTranscriber() {
         model,
         language: transcriptLanguage,
         detectSpeakers,
+        preferMemorySavingAsr,
       },
       [audio.buffer]
     );
