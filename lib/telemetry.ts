@@ -18,12 +18,11 @@ import { isElectron } from "./platform";
  *   on, off, or unreachable. That matters: the app is meant to work with the
  *   network cable pulled.
  *
- * Opt-out lives in Settings and is honoured before any of this runs.
+ * Opt-in lives in Settings and is honoured before any of this runs. A fork
+ * without NEXT_PUBLIC_TELEMETRY_ENDPOINT never sends usage data.
  */
 
-const ENDPOINT =
-  process.env.NEXT_PUBLIC_TELEMETRY_ENDPOINT ??
-  "https://www.getrescript.com/api/telemetry";
+const ENDPOINT = process.env.NEXT_PUBLIC_TELEMETRY_ENDPOINT;
 
 const INSTALL_ID_KEY = "rescript.installId";
 const ENABLED_KEY = "rescript.telemetry";
@@ -53,10 +52,10 @@ function write(key: string, value: string) {
   }
 }
 
-/** Opt-out, so an unset value means enabled. */
+/** KwikScript is private by default; telemetry requires an endpoint and opt-in. */
 export function isTelemetryEnabled(): boolean {
   if (typeof window === "undefined") return false;
-  return read(ENABLED_KEY) !== "off";
+  return Boolean(ENDPOINT) && read(ENABLED_KEY) === "on";
 }
 
 /**
@@ -101,7 +100,7 @@ function platform(): "macos" | "windows" | "linux" | "unknown" {
 
 export function trackEvent(event: TelemetryEvent, props?: Props) {
   if (typeof window === "undefined") return;
-  if (!isTelemetryEnabled()) return;
+  if (!ENDPOINT || !isTelemetryEnabled()) return;
 
   const id = installId();
   if (!id) return;

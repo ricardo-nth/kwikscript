@@ -274,14 +274,14 @@ export default function UploadScreen({
                 <div className="flex min-w-0 items-center">
                   <Image
                     src={logo}
-                    alt="Rescript"
+                    alt="KwikScript"
                     width={24}
                     height={24}
                     priority
                     className="rounded-sm border border-zinc-200 dark:border-zinc-700"
                   />
                   <p className="ml-2 text-[15px] font-medium text-zinc-800 dark:text-zinc-100">
-                    Rescript
+                    KwikScript
                   </p>
                 </div>
               </a>

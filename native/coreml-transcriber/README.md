@@ -1,6 +1,6 @@
-# Rescript Core ML transcriber
+# KwikScript Core ML transcriber
 
-This is the macOS/Apple-Silicon transcription process used by Rescript Punchy.
+This is the macOS/Apple-Silicon transcription process used by KwikScript.
 The Electron host extracts a mono 16 kHz WAV with native FFmpeg, invokes this
 helper, and reads its timestamped JSON result. There is deliberately no
 browser/WASM or Intel fallback in the Punchy build.

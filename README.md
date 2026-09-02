@@ -1,129 +1,154 @@
-<p align="center">
-  <img src="./screenshots/logo.png" alt="Rescript logo" width="96" /><br/>
-  Edit video and audio like you edit text — fully offline, on your device.
-</p>
+# KwikScript
 
-# rescript.
-[![Join the Discord](https://img.shields.io/badge/Discord-Join%20the%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/qJAhYFydat)
-[![Follow @wassgha on X](https://img.shields.io/badge/Follow%20@wassgha-000000?logo=x&logoColor=white)](https://x.com/wassgha)
+KwikScript is an experimental Apple-Silicon fork of
+[Rescript](https://github.com/wassgha/rescript) for fast, local talking-head
+editing. It combines transcript-based cuts with the silence controls normally
+found in waveform-first tools, then exports an FCPXML timeline for finishing in
+Final Cut Pro.
 
-**✨ Try it in the browser [app.getrescript.com](https://app.getrescript.com/)** or download the [Desktop App](#download)
+This is a power-user project, not a polished commercial product. The current
+priority is one reliable workflow on an M1 Mac: single-speaker English footage,
+local transcription, punchy pause removal, filler-word cleanup, and Final Cut
+handoff.
 
-[![Rescript Demo](./screenshots/rescript.png)](https://getrescript.com/)
+## What this fork adds
 
-Rescript is an open-source, transcript-based media editor. Drop in a video or
-audio file and it is transcribed locally with per-word timestamps and speaker
-labels. Delete words in the transcript and the corresponding clip is cut from
-the media. Export the final cut — without your file ever leaving your device.
+- Native Parakeet v3 transcription through Core ML and the Apple Neural Engine.
+- Native Silero VAD recovery for vocalisations Parakeet heard but did not emit.
+- Filler-word removal that can be previewed, removed, and restored.
+- Manual silence loudness threshold remembered between sessions.
+- Silence duration modes: **Up to** a duration or **Between** two durations.
+- Independent left/right padding, including true zero-padding cuts.
+- Orange previews for proposed silence cuts before applying them.
+- Restorable silence cuts and direct top-level cleanup actions.
+- Lower-memory media ingestion that reads the original source rather than
+  copying multi-gigabyte video files into the app.
+- Apple-Silicon-only packaging without the former ONNX speech runtimes.
 
-## Download
+The original text editor, waveform, media preview, manual cuts, transcript
+imports, exports, and FCPXML workflow remain inherited from Rescript.
 
-<div align="center">
+## Current scope and caveats
 
-<a href="https://www.getrescript.com/download?platform=mac-arm"><img src="assets/download/download-macos-arm64.svg" alt="Download for macOS — Apple Silicon" height="48"></a> &nbsp; <a href="https://www.getrescript.com/download?platform=mac-intel"><img src="assets/download/download-macos-x64.svg" alt="Download for macOS — Intel" height="48"></a> &nbsp; <a href="https://www.getrescript.com/download?platform=windows"><img src="assets/download/download-windows.svg" alt="Download for Windows" height="48"></a> &nbsp; <a href="https://www.getrescript.com/download?platform=linux"><img src="assets/download/download-linux-appimage.svg" alt="Download the AppImage for Linux" height="48"></a> &nbsp; <a href="https://www.getrescript.com/download?platform=linux-deb"><img src="assets/download/download-debian-deb.svg" alt="Download the .deb for Linux" height="48"></a>
+- macOS 14 or newer on Apple Silicon (M1 or newer).
+- English and one speaker are the tested path.
+- [Homebrew FFmpeg](https://formulae.brew.sh/formula/ffmpeg) is currently a
+  runtime prerequisite. It is deliberately not bundled yet.
+- The first transcription downloads approximately 470 MB of Parakeet v3 Core
+  ML models plus a roughly 1 MB Silero model. FluidAudio caches them under the
+  user Library, so rebuilding or replacing the app does not download them again.
+- Local builds are ad-hoc signed. A public click-to-install binary still needs a
+  Developer ID certificate and Apple notarization.
+- Intel Macs, Windows, Linux, and the web build are not maintained by this fork.
+- Speaker diarization is intentionally disabled for the current workflow.
+- The upstream PolyForm Noncommercial license remains in force. See
+  [License](#license) before using or distributing the software.
 
-</div>
+## Build it locally
 
-See the [Releases](https://github.com/wassgha/rescript/releases) page. Desktop
-builds auto-update from GitHub Releases. Prefer the browser? Use the
-[web app](https://getrescript.com/) — same editor, no install.
+Install the Apple command-line tools, Node.js 22, and FFmpeg:
 
-- 🔒 **Private by design** — no auth, no uploads; all media processing happens on-device
-- 📝 **Word-level editing** — select words, press ⌫, the cut follows the text
-- 📥 **Import your own transcript** — skip Whisper and edit with an SRT, VTT, or JSON caption file
-- 📤 **Export hub** — video (MP4/WebM, 720p–4K), audio (M4A/MP3/WAV), transcript (TXT/MD), subtitles (SRT/VTT/JSON), or NLE timeline (Resolve/Premiere/FCP/AAF)
-- 🧹 **Filler removal** — one-click cut of "um", "uh", and similar fillers
-- 🔇 **Silence removal** — configurable pause length and independent left/right padding, with a punchy preset
-- 🗣️ **Speaker diarization** — the transcript is grouped by speaker
-- 🎬 **Timeline** — waveform, wordbar with draggable timing handles, Split,
-  cut regions, playhead; scroll to zoom, side-scroll to pan
-- ✂️ **Split & trim** — blade clips at the playhead; drag clip edges to refine
-  cuts beyond word boundaries
-- 🎯 **Word timing** — zoom in and drag a word's edges when ASR alignment is off
-- 🔴 **Cut edges** — drag either edge of a cut to trim independently of Whisper
-  timestamps; double-click to reset
-- ⚡ **Live preview** — playback skips your cuts in real time
-- 📦 **In-browser / desktop export** — frame-accurate re-encode with ffmpeg.wasm
-- 🎞️ **NLE timeline export** — DaVinci Resolve / Premiere XML, Final Cut FCPXML, Pro Tools/Logic AAF
-- 🎧 **Audio files** — edit podcasts, voice notes, and interviews the same way as video
-- 🖥️ **Desktop app** — macOS, Windows, and Linux via Electron (signed + notarized on Mac)
+```bash
+xcode-select --install
+brew install node@22 ffmpeg
+```
 
-## Stack
+Clone and build:
 
-| Piece | Tech |
-| --- | --- |
-| App | [Next.js](https://nextjs.org) + React + TypeScript + Tailwind |
-| Desktop | [Electron](https://www.electronjs.org/) + [electron-builder](https://www.electron.build/) (auto-update from GitHub Releases) |
-| Transcription | [transformers.js](https://github.com/huggingface/transformers.js) running [`whisper-base_timestamped`](https://huggingface.co/onnx-community/whisper-base_timestamped) or [`whisper-small_timestamped`](https://huggingface.co/onnx-community/whisper-small_timestamped) (WebGPU with WASM fallback) in a Web Worker |
-| Speaker labels | [`pyannote-segmentation-3.0`](https://huggingface.co/onnx-community/pyannote-segmentation-3.0) (ONNX) |
-| Media processing | [ffmpeg.wasm](https://ffmpegwasm.netlify.app/) (multi-threaded) for audio extraction and export |
-| State | zustand |
+```bash
+git clone https://github.com/ricardo-nth/kwikscript.git
+cd kwikscript
+npm ci
+npm run dist
+```
+
+The Apple-Silicon app and archives are written to `dist/`:
+
+```text
+dist/mac-arm64/KwikScript.app
+dist/KwikScript-mac-arm64.dmg
+dist/KwikScript-mac-arm64.zip
+```
+
+Open the locally built app:
+
+```bash
+open "dist/mac-arm64/KwikScript.app"
+```
+
+Because a local build is not notarized, macOS may ask you to confirm it the
+first time. Do not bypass Gatekeeper for binaries from people you do not trust;
+building from source is the supported route for now.
 
 ## Development
 
 ```bash
-npm install     # also copies ffmpeg/onnxruntime WASM into public/vendor
-npm run dev     # Next.js web app (http://localhost:3000)
-npm run electron:dev   # Electron shell + Next.js dev server
-npm run build   # production web build
-npm run dist    # unsigned desktop installers into dist/
-npm run lint    # eslint
+npm ci
+npm run electron:dev
+npm run lint
+npm run typecheck:electron
+npx tsc --noEmit
+npm run build:native:coreml
 ```
 
-For desktop packaging, signing, and cutting releases, see
-[RELEASING.md](./RELEASING.md).
+The native helper is in [`native/coreml-transcriber`](native/coreml-transcriber).
+Its Swift package pins FluidAudio so model behaviour does not drift silently.
 
-## How it works
+## Reproduce the performance test
 
-[![Rescript Promo](./screenshots/rescript-2.png)](https://getrescript.com/)
+Build the helper once, then point the benchmark at a video or audio file:
 
-1. **Extract** — ffmpeg.wasm decodes the audio track to mono 16 kHz PCM.
-2. **Transcribe** — Whisper runs in a Web Worker with `return_timestamps: "word"`,
-   streaming text as it goes; pyannote assigns a speaker to every word.
-   Choose **Whisper Base**, **Whisper Small**, or **Import transcript**
-   (SRT / VTT / JSON) on the homepage.
-3. **Edit** — deleting words produces "cut ranges" of the original media. The
-   preview player skips them in real time and the timeline shows them in red.
-   **Remove fillers** cuts every detected "um" / "uh" / etc. in one click.
-   **Silence cleanup** lets you choose the minimum pause length and how much padding to keep before and after speech. The **Punchy** preset uses a 0.13s minimum with zero padding; **Default** preserves the original 0.3s / 0.05s behaviour.
-4. **Export** — the kept ranges are trimmed and concatenated with an ffmpeg
-   filter graph and re-encoded (`libx264`/`aac`), so cuts are word-accurate.
+```bash
+npm run build:native:coreml
+npm run benchmark:coreml -- /absolute/path/to/video.mp4
+```
 
-## Browser support
+The script extracts mono 16 kHz audio with the same native FFmpeg path used by
+the app, runs Parakeet v3, and prints timings plus transcript counts. It does not
+retain the extracted audio unless `--keep-temp` is supplied.
 
-A Chromium-based browser is recommended for the web app. It requires
-`SharedArrayBuffer` (served with COOP/COEP headers) and uses WebGPU for
-inference when available, falling back to WASM otherwise. The desktop app
-bundles Chromium via Electron and sets the same isolation headers on its
-`app://` protocol.
+The current M1/8 GB baseline and the Electron-to-Swift decision gates are in:
 
-## Telemetry
+- [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)
+- [`docs/SWIFT-MIGRATION.md`](docs/SWIFT-MIGRATION.md)
 
-By default, Rescript reports anonymous usage stats and crash reports so we can
-tell how many people actually use it, which features are worth the maintenance,
-and what's breaking. You can turn both off in **Settings → Privacy → Help
-improve the app**, which stops them immediately and permanently on that install. Crash reports go to Sentry and carry a stack trace, the app version, and the platform.
+## Editing workflow
+
+1. Import the original video or a time-identical proxy.
+2. Let Core ML generate the word-timed transcript.
+3. Preview and remove filler words.
+4. Set silence threshold, duration range, and padding while orange previews show
+   what will be cut.
+5. Apply the silence cuts, restoring any intentional pauses as needed.
+6. Export FCPXML and reconnect to the original 4K media in Final Cut Pro.
+7. Finish colour, captions, graphics, and delivery in Final Cut.
+
+## Why Electron remains for now
+
+The expensive speech path is already native Swift/Core ML. On the tested
+9-minute 4K source, transcription is no longer where Electron adds meaningful
+overhead. A full Swift UI rewrite is therefore a measured future option, not an
+assumed optimization. The next useful native boundaries are ingestion, export,
+and only then the editor UI if profiling shows it is responsible for sustained
+memory, heat, playback, or interaction problems.
+
+## Upstream and attribution
+
+KwikScript is based on Rescript by Wassim Gharbi and its contributors. The
+project preserves the upstream Git history, license, and required notice. This
+fork is independent and is not an official Rescript release.
+
+Upstream: <https://github.com/wassgha/rescript>
 
 ## License
 
 Copyright (c) 2026 Wassim Gharbi and Rescript contributors.
 
-Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
-You may use, modify, and share Rescript for noncommercial purposes only, and
-you must retain the required copyright notice. Commercial use (including
-reselling or redistributing the software for a fee) is not permitted under
-this license. Contact the author for commercial licensing.
+Required Notice: Copyright (c) 2026 Wassim Gharbi and Rescript contributors
+(https://github.com/wassgha/rescript)
 
-Prior releases published under the MIT License remain available under MIT for
-those versions only.
-
----
-
-[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-111?style=flat-square)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-Web%20·%20macOS%20·%20Windows%20·%20Linux-111?style=flat-square)](#download)
-[![Electron](https://img.shields.io/badge/Electron-42-111?style=flat-square&logo=electron&logoColor=9FEAF9)](https://www.electronjs.org/)
-[![Stars](https://img.shields.io/github/stars/wassgha/rescript?style=flat-square&color=111)](https://github.com/wassgha/rescript/stargazers)
-[![Latest release](https://img.shields.io/github/v/release/wassgha/rescript?label=latest%20release&sort=semver&style=flat-square&color=111)](https://github.com/wassgha/rescript/releases/latest)
-
-Built by [@wassgha](https://x.com/wassgha) — follow along on X for updates, or
-come say hi in the [Discord](https://discord.com/invite/qJAhYFydat).
+Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). The license
+permits distribution of modified copies for permitted noncommercial purposes
+when the terms and required notice travel with the software. It does not grant
+general commercial-use rights. Resolve commercial licensing questions with the
+upstream licensor rather than relying on this README as legal advice.

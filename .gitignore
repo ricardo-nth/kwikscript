@@ -20,6 +20,7 @@
 # electron compile + electron-builder packages
 /electron-dist/
 /dist/
+/native/coreml-transcriber/.build/
 
 # Locally-served speech models (tools/crisperwhisper-onnx/install_local.py).
 # Hundreds of MB of ONNX weights, reproducible from the export tooling, and

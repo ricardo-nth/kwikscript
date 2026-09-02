@@ -1,7 +1,7 @@
 {
-  "name": "rescript",
-  "version": "1.1.11",
-  "description": "Rescript — edit video and audio like you edit text, fully offline.",
+  "name": "kwikscript",
+  "version": "0.1.0",
+  "description": "KwikScript — fast, local transcript and silence editing for Apple Silicon.",
   "private": true,
   "author": {
     "name": "Wassim Gharbi",
@@ -11,7 +11,7 @@
   "license": "PolyForm-Noncommercial-1.0.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wassgha/rescript.git"
+    "url": "git+https://github.com/ricardo-nth/kwikscript.git"
   },
   "main": "./electron-dist/main.js",
   "scripts": {
@@ -24,6 +24,7 @@
     "postinstall": "patch-package && node scripts/copy-assets.mjs",
     "build:electron": "node scripts/build-electron.mjs",
     "build:native:coreml": "node scripts/build-native-coreml.mjs",
+    "benchmark:coreml": "node scripts/benchmark-coreml.mjs",
     "typecheck:electron": "tsc -p electron/tsconfig.json --noEmit",
     "electron:dev": "npm run build:electron && concurrently -k -n next,electron -c cyan,magenta \"next dev\" \"node scripts/electron-dev.mjs\"",
     "export:web": "cross-env STATIC_EXPORT=1 next build",
@@ -79,8 +80,8 @@
     "typescript": "^5"
   },
   "build": {
-    "appId": "io.rescript.punchy",
-    "productName": "Rescript Punchy",
+    "appId": "com.ricardonth.kwikscript",
+    "productName": "KwikScript",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -88,8 +89,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "wassgha",
-        "repo": "rescript"
+        "owner": "ricardo-nth",
+        "repo": "kwikscript"
       }
     ],
     "files": [
@@ -131,8 +132,8 @@
       "entitlementsInherit": "build/entitlements.mac.plist",
       "notarize": true,
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Rescript can use the microphone for on-device speech transcription features.",
-        "NSDocumentsFolderUsageDescription": "Rescript opens and exports video and audio files you select."
+        "NSMicrophoneUsageDescription": "KwikScript can use the microphone for on-device speech transcription features.",
+        "NSDocumentsFolderUsageDescription": "KwikScript opens and exports video and audio files you select."
       }
     },
     "win": {

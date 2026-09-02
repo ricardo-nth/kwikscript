@@ -5,7 +5,7 @@ import { isTelemetryEnabled } from "./telemetry";
 /**
  * Crash reporting for the renderer (web app and Electron alike).
  *
- * Governed by the same opt-out as usage telemetry: if "Help improve the app" is
+ * Governed by the same opt-in as usage telemetry: if "Help improve the app" is
  * off, the SDK is never initialised, so nothing is captured and nothing is sent.
  */
 

@@ -9,7 +9,7 @@ import * as Sentry from "@sentry/electron/main";
  * protocol handler, and window management. Failures there are the ones the
  * renderer can never tell us about, because they stop the window existing.
  *
- * The opt-out lives in renderer localStorage, which this process cannot read, so
+ * The opt-in lives in renderer localStorage, which this process cannot read, so
  * the preference is mirrored to disk (see `electron/preload.ts` →
  * `telemetry:set-enabled`). That mirror is what makes early-startup gating
  * possible at all: by the time the renderer could tell us, the crash we most
@@ -49,13 +49,13 @@ function prefPath(): string {
   return join(app.getPath("userData"), PREF_FILE);
 }
 
-/** Opt-out, so an unreadable or absent file means enabled — matching the renderer. */
+/** Crash reporting is opt-in for this fork; absent state means disabled. */
 function loadPreference(): boolean {
   try {
     const raw = readFileSync(prefPath(), "utf8");
     return (JSON.parse(raw) as { enabled?: boolean }).enabled !== false;
   } catch {
-    return true;
+    return false;
   }
 }
 

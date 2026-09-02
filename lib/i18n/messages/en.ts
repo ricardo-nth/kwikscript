@@ -1,7 +1,7 @@
 /** English UI catalog. Runtime English emitters must match these values exactly
  *  when they flow through {@link localizeRuntimeMessage}. */
 export const en = {
-  "app.title": "Rescript — edit videos like you edit text",
+  "app.title": "KwikScript — edit videos like you edit text",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.delete": "Delete",
@@ -191,13 +191,13 @@ export const en = {
   "import.chooseFile": "Choose an SRT, VTT, or JSON transcript",
   "import.selected": "{name} selected",
   "banner.faster": "Want faster transcription and exports?",
-  "banner.getDesktop": "Get the Rescript desktop app",
+  "banner.getDesktop": "Get the KwikScript desktop app",
   "banner.downloadFor": "Download for {platform}",
   "banner.dismiss": "Dismiss",
   "social.githubRepo": "GitHub repository",
   "social.discordServer": "Discord server",
   "social.xProfile": "X profile",
-  "globalError.title": "Rescript — something went wrong",
+  "globalError.title": "KwikScript — something went wrong",
   "globalError.heading": "Something went wrong",
   "globalError.body":
     "The editor hit an unexpected error. Your saved projects are still on this device — reloading should bring them back.",
