@@ -1,6 +1,5 @@
 import {
   DEFAULT_SILENCE_PREFERENCES,
-  PUNCHY_SILENCE_PREFERENCES,
   SILENCE_DURATION_MAX,
   SILENCE_DURATION_MIN,
   SILENCE_PAD_MAX,
@@ -10,13 +9,6 @@ import {
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
-}
-
-{
-  const normalized = normalizeSilencePreferences(PUNCHY_SILENCE_PREFERENCES);
-  assert(normalized.minDuration === 0.13, "punchy minimum duration");
-  assert(normalized.threshold === 0.03, "punchy loudness threshold");
-  assert(normalized.padStart === 0 && normalized.padEnd === 0, "punchy zero padding");
 }
 
 {
@@ -31,13 +23,19 @@ function assert(value: unknown, message: string): asserts value {
     padStart: 99,
     padEnd: -2,
     maxDuration: 0,
-    protectLongPauses: true,
     threshold: 99,
   });
   assert(clamped.minDuration === SILENCE_DURATION_MIN, "minimum clamped");
   assert(clamped.padStart === SILENCE_PAD_MAX && clamped.padEnd === 0, "padding clamped");
   assert(clamped.maxDuration >= clamped.minDuration, "maximum follows minimum");
   assert(clamped.threshold === SILENCE_THRESHOLD_MAX, "threshold clamped");
+}
+
+{
+  const range = normalizeSilencePreferences({ minDuration: 0.13, maxDuration: 0.4 });
+  assert(range.minDuration === 0.13 && range.maxDuration === 0.4, "duration range retained");
+  const crossed = normalizeSilencePreferences({ minDuration: 0.7, maxDuration: 0.2 });
+  assert(crossed.maxDuration === crossed.minDuration, "maximum cannot cross minimum");
 }
 
 {

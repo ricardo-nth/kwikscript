@@ -105,6 +105,11 @@ interface EditorState {
 
   // Transcript / edits
   words: Word[];
+  /**
+   * Quiet ranges matching the current silence controls. Preview-only: these
+   * remain playable and are never saved, exported, or included in undo.
+   */
+  silencePreviewRanges: TimeRange[];
   /** Named speakers in the project (ids match Word.speaker). */
   speakers: SpeakerInfo[];
   manualCuts: ManualCut[];
@@ -171,6 +176,7 @@ interface EditorState {
    * Used when the user brings their own SRT/VTT/JSON instead of Whisper.
    */
   importWords: (words: Word[], speakers?: SpeakerInfo[]) => void;
+  setSilencePreviewRanges: (ranges: TimeRange[]) => void;
   /** Rename a speaker everywhere it appears. */
   renameSpeaker: (id: number, name: string) => void;
   /** Create a new speaker; returns its id (or -1 if unchanged). */
@@ -292,6 +298,17 @@ function maxId(items: Array<{ id: number }>, fallback = 1): number {
   return items.reduce((m, x) => Math.max(m, x.id), fallback - 1) + 1;
 }
 
+function sameRanges(left: TimeRange[], right: TimeRange[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (range, index) =>
+        Math.abs(range.start - right[index]!.start) < 1e-4 &&
+        Math.abs(range.end - right[index]!.end) < 1e-4
+    )
+  );
+}
+
 function pushEdit(
   get: () => EditorState,
   set: (
@@ -347,6 +364,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   error: null,
 
   words: [],
+  silencePreviewRanges: [],
   speakers: [],
   manualCuts: [],
   sceneBoundaries: [],
@@ -394,6 +412,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         value: null,
       },
       words: imported ? imported : [],
+      silencePreviewRanges: [],
       speakers,
       manualCuts: [],
       sceneBoundaries: [],
@@ -445,6 +464,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       status: "preparing",
       progress: { message: en["progress.loadingMediaEngine"], value: null },
       words: record.words,
+      silencePreviewRanges: [],
       speakers,
       manualCuts,
       sceneBoundaries,
@@ -506,6 +526,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setWords: (words, speakers) => {
     set({
       words,
+      silencePreviewRanges: [],
       speakers: speakersFromWords(words, speakers ?? []),
       manualCuts: [],
       sceneBoundaries: [],
@@ -531,6 +552,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     void import("@/hooks/useTranscriber").then((m) => m.cancelTranscription());
     set({
       words,
+      silencePreviewRanges: [],
       speakers: speakersFromWords(words, speakers ?? []),
       manualCuts: [],
       sceneBoundaries: [],
@@ -548,6 +570,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
     bumpAutosave();
   },
+  setSilencePreviewRanges: (silencePreviewRanges) =>
+    set((state) =>
+      sameRanges(state.silencePreviewRanges, silencePreviewRanges)
+        ? state
+        : { silencePreviewRanges }
+    ),
 
   renameSpeaker: (id, name) => {
     const { speakers } = get();
@@ -1029,6 +1057,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       partialText: "",
       error: null,
       words: [],
+      silencePreviewRanges: [],
       speakers: [],
       manualCuts: [],
       sceneBoundaries: [],

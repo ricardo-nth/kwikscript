@@ -3,6 +3,7 @@ import {
   findSilenceCuts,
   findSilenceRanges,
   findWaveformSilenceRanges,
+  mapSilencePreviewsToWords,
   MIN_SILENCE_DURATION,
   removeOwnedSilenceCuts,
   SILENCE_PAD,
@@ -13,6 +14,18 @@ import { buildWaveformPeaks } from "../lib/waveform";
 
 function nearly(a: number, b: number, eps = 1e-4): boolean {
   return Math.abs(a - b) < eps;
+}
+
+{
+  const words = [w(1, 0, 0.2), w(2, 0.5, 0.8)];
+  const ranges = [
+    { start: 0.2, end: 0.5 },
+    { start: 0.8, end: 1 },
+  ];
+  const mapped = mapSilencePreviewsToWords(words, ranges);
+  assert(mapped.beforeWordId.get(2)?.[0] === ranges[0], "inter-word preview anchors before speech");
+  assert(mapped.trailing[0] === ranges[1], "trailing preview stays after transcript");
+  console.log("transcript silence preview anchors: ok");
 }
 
 function w(

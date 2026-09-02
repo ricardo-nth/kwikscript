@@ -11,10 +11,9 @@ export const SILENCE_DURATION_STEP = 0.01;
 export const SILENCE_PAD_MIN = 0;
 export const SILENCE_PAD_MAX = 0.5;
 export const SILENCE_PAD_STEP = 0.01;
-export const LONG_PAUSE_MIN = 0.5;
-export const LONG_PAUSE_MAX = 10;
-export const LONG_PAUSE_STEP = 0.1;
-export const DEFAULT_LONG_PAUSE_LIMIT = 2.5;
+export const SILENCE_MAX_DURATION_MAX = 10;
+export const SILENCE_MAX_DURATION_STEP = 0.01;
+export const DEFAULT_SILENCE_MAX_DURATION = 2.5;
 export const SILENCE_THRESHOLD_MIN = 0;
 // Speech below 0.1 (-20 dBFS peak-equivalent) is already very quiet; keeping
 // the useful range compact makes the native slider precise around 0.03.
@@ -30,8 +29,7 @@ export interface SilencePreferences {
   padStart: number;
   /** Existing quiet audio retained before the speech on the right of a cut. */
   padEnd: number;
-  /** When enabled, gaps longer than this stay untouched. */
-  protectLongPauses: boolean;
+  /** Gaps longer than this stay untouched. */
   maxDuration: number;
 }
 
@@ -40,18 +38,7 @@ export const DEFAULT_SILENCE_PREFERENCES: SilencePreferences = {
   minDuration: MIN_SILENCE_DURATION,
   padStart: SILENCE_PAD,
   padEnd: SILENCE_PAD,
-  protectLongPauses: false,
-  maxDuration: DEFAULT_LONG_PAUSE_LIMIT,
-};
-
-/** Matches the ReCut settings supplied for fast short-form delivery. */
-export const PUNCHY_SILENCE_PREFERENCES: SilencePreferences = {
-  threshold: 0.03,
-  minDuration: 0.13,
-  padStart: 0,
-  padEnd: 0,
-  protectLongPauses: false,
-  maxDuration: DEFAULT_LONG_PAUSE_LIMIT,
+  maxDuration: DEFAULT_SILENCE_MAX_DURATION,
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -76,8 +63,8 @@ export function normalizeSilencePreferences(
   );
   const maxDuration = clamp(
     finiteNumber(value?.maxDuration, DEFAULT_SILENCE_PREFERENCES.maxDuration),
-    Math.max(LONG_PAUSE_MIN, minDuration),
-    LONG_PAUSE_MAX
+    minDuration,
+    SILENCE_MAX_DURATION_MAX
   );
   return {
     threshold: clamp(
@@ -102,10 +89,6 @@ export function normalizeSilencePreferences(
       SILENCE_PAD_MIN,
       SILENCE_PAD_MAX
     ),
-    protectLongPauses:
-      typeof value?.protectLongPauses === "boolean"
-        ? value.protectLongPauses
-        : DEFAULT_SILENCE_PREFERENCES.protectLongPauses,
     maxDuration,
   };
 }

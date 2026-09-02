@@ -99,6 +99,7 @@ export default function Timeline() {
   const { t } = useI18n();
   const waveform = useEditorStore((s) => s.waveform);
   const words = useEditorStore((s) => s.words);
+  const silencePreviewRanges = useEditorStore((s) => s.silencePreviewRanges);
   const sceneBoundaries = useEditorStore((s) => s.sceneBoundaries);
   const duration = useEditorStore((s) => s.duration);
   const currentTime = useEditorStore((s) => s.currentTime);
@@ -267,6 +268,32 @@ export default function Timeline() {
       }
     }
 
+    // Candidate silences remain playable. Amber distinguishes this preview
+    // state from committed red cuts without making the ranges selectable.
+    for (const preview of silencePreviewRanges) {
+      const x0 = preview.start * pps - scrollLeft;
+      const x1 = preview.end * pps - scrollLeft;
+      if (x1 < 0 || x0 > width) continue;
+      const fillW = x1 - x0;
+      ctx.fillStyle = dark ? "rgba(180, 83, 9, 0.28)" : "rgba(254, 243, 199, 0.82)";
+      ctx.fillRect(x0, trackTop, fillW, trackH);
+      ctx.fillStyle = dark ? "rgba(251, 191, 36, 0.72)" : "rgba(245, 158, 11, 0.68)";
+      ctx.fillRect(x0, RULER_H + WORDBAR_H - 3, fillW, 3);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0, trackTop, fillW, trackH);
+      ctx.clip();
+      ctx.strokeStyle = dark ? "rgba(251, 191, 36, 0.35)" : "rgba(245, 158, 11, 0.28)";
+      ctx.lineWidth = 1;
+      for (let x = x0 - trackH; x < x0 + fillW + trackH; x += 7) {
+        ctx.beginPath();
+        ctx.moveTo(x + trackH, trackTop);
+        ctx.lineTo(x, trackTop + trackH);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // Cut range backgrounds (selected / hovered wash stronger)
     cuts.forEach((cut, cutIndex) => {
       const x0 = cut.start * pps - scrollLeft;
@@ -333,13 +360,17 @@ export default function Timeline() {
       const i0 = Math.floor(t * VAD_SAMPLE_RATE);
       const peak = peakBetween(waveform, i0, Math.floor(i0 + samplesPerPx) + 1);
       const inCut = cuts.some((c) => t >= c.start && t < c.end);
-      ctx.fillStyle = inCut ? "#fca5a5" : "#818cf8";
+      const inPreview = silencePreviewRanges.some(
+        (range) => t >= range.start && t < range.end
+      );
+      ctx.fillStyle = inCut ? "#fca5a5" : inPreview ? "#fbbf24" : "#818cf8";
       const h = Math.max(1, peak * trackH * WAVE_LANE_FILL);
       ctx.fillRect(x, midY - h / 2, 1, h);
     }
   }, [
     waveform,
     cuts,
+    silencePreviewRanges,
     clips,
     duration,
     pps,

@@ -19,12 +19,13 @@ import { FloatingPortal } from "@floating-ui/react";
 import { useEditorStore } from "@/lib/store";
 import { isDisfluencyPlaceholder } from "@/lib/disfluencies";
 import TranscriptToolsMenu from "./TranscriptToolsMenu";
+import { mapSilencePreviewsToWords } from "@/lib/silences";
 import {
   isTranscriptFile,
   parseTranscriptFile,
   TRANSCRIPT_ACCEPT,
 } from "@/lib/parseTranscript";
-import type { Word } from "@/lib/types";
+import type { TimeRange, Word } from "@/lib/types";
 import TranscriptScrollIndicator from "./TranscriptScrollIndicator";
 import SpeakerLabel, {
   SelectionSpeakerButton,
@@ -112,9 +113,39 @@ const SplitMarker = memo(function SplitMarker({
   );
 });
 
+const SilencePreviewMarker = memo(function SilencePreviewMarker({
+  range,
+  onPreview,
+}: {
+  range: TimeRange;
+  onPreview: (range: TimeRange) => void;
+}) {
+  const { t } = useI18n();
+  const seconds = (range.end - range.start)
+    .toFixed(2)
+    .replace(/0+$/, "")
+    .replace(/\.$/, "");
+  const label = t("transcript.silencePreview", { seconds });
+  return (
+    <button
+      type="button"
+      data-silence-preview
+      title={label}
+      aria-label={label}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => onPreview(range)}
+      className="mx-0.5 inline-flex h-5 cursor-pointer select-none items-center gap-1 rounded-md border border-amber-300/80 bg-amber-50 px-1.5 align-middle text-[10px] font-medium tabular-nums leading-none text-amber-700 transition hover:border-amber-400 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 dark:border-amber-700/80 dark:bg-amber-950/45 dark:text-amber-300 dark:hover:border-amber-600 dark:hover:bg-amber-950/70"
+    >
+      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+      {seconds}s
+    </button>
+  );
+});
+
 export default function TranscriptPanel() {
   const { t } = useI18n();
   const words = useEditorStore((s) => s.words);
+  const silencePreviewRanges = useEditorStore((s) => s.silencePreviewRanges);
   const sceneBoundaries = useEditorStore((s) => s.sceneBoundaries);
   const duration = useEditorStore((s) => s.duration);
   const status = useEditorStore((s) => s.status);
@@ -140,6 +171,21 @@ export default function TranscriptPanel() {
     }
     return ids;
   }, [words, cuts]);
+
+  const previewAnchors = useMemo(
+    () =>
+      mapSilencePreviewsToWords(
+        showDeleted ? words : words.filter((word) => !cutOutIds.has(word.id)),
+        silencePreviewRanges
+      ),
+    [showDeleted, words, cutOutIds, silencePreviewRanges]
+  );
+  const lastPreviewWordId = useMemo(() => {
+    const visible = showDeleted
+      ? words
+      : words.filter((word) => !cutOutIds.has(word.id));
+    return visible[visible.length - 1]?.id ?? null;
+  }, [showDeleted, words, cutOutIds]);
 
   // Splits get a joinable edit boundary in the transcript, like the timeline's
   // marker. Splits at the edge of a skipped region are inert and hidden in both.
@@ -196,6 +242,10 @@ export default function TranscriptPanel() {
     },
     [handleWordClick, resumeFollowPlayhead]
   );
+
+  const onSilencePreview = useCallback((range: TimeRange) => {
+    useEditorStore.getState().seekTo(range.start);
+  }, []);
 
   const toolbarOpen = !!(selection && !correcting && !assigningSpeaker);
   const { setFloating: setToolbarFloating, floatingStyles: toolbarStyles } =
@@ -461,8 +511,16 @@ export default function TranscriptPanel() {
                     <p className="select-text text-[15px] leading-8">
                       {visible.map((w) => {
                         const split = splitBeforeWordId.get(w.id);
+                        const previews = previewAnchors.beforeWordId.get(w.id) ?? [];
                         return (
                           <React.Fragment key={w.id}>
+                            {previews.map((range) => (
+                              <SilencePreviewMarker
+                                key={`${range.start}-${range.end}`}
+                                range={range}
+                                onPreview={onSilencePreview}
+                              />
+                            ))}
                             {split && (
                               <SplitMarker boundaryId={split.id} onJoin={removeSceneBoundary} />
                             )}
@@ -475,6 +533,14 @@ export default function TranscriptPanel() {
                           </React.Fragment>
                         );
                       })}
+                      {visible[visible.length - 1]?.id === lastPreviewWordId &&
+                        previewAnchors.trailing.map((range) => (
+                          <SilencePreviewMarker
+                            key={`trailing-${range.start}-${range.end}`}
+                            range={range}
+                            onPreview={onSilencePreview}
+                          />
+                        ))}
                     </p>
                   </div>
                 );

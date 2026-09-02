@@ -64,6 +64,37 @@ export function removeOwnedSilenceCuts(manualCuts: ManualCut[]): ManualCut[] {
   return manualCuts.filter((cut) => cut.source !== "silence");
 }
 
+/**
+ * Anchor preview badges in the transcript without pretending silence belongs
+ * to a spoken word. Each range appears before the first visible word whose
+ * midpoint follows it; end-of-media silence is returned as `trailing`.
+ */
+export function mapSilencePreviewsToWords(
+  words: Word[],
+  ranges: TimeRange[]
+): { beforeWordId: Map<number, TimeRange[]>; trailing: TimeRange[] } {
+  const orderedWords = words
+    .slice()
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  const beforeWordId = new Map<number, TimeRange[]>();
+  const trailing: TimeRange[] = [];
+
+  for (const range of ranges) {
+    const nextWord = orderedWords.find(
+      (word) => word.start + (word.end - word.start) / 2 >= range.end - 1e-4
+    );
+    if (!nextWord) {
+      trailing.push(range);
+      continue;
+    }
+    const current = beforeWordId.get(nextWord.id) ?? [];
+    current.push(range);
+    beforeWordId.set(nextWord.id, current);
+  }
+
+  return { beforeWordId, trailing };
+}
+
 /** Split `range` into the pieces not covered by any of `cuts`. */
 function subtractCuts(range: TimeRange, cuts: TimeRange[]): TimeRange[] {
   let parts: TimeRange[] = [range];
