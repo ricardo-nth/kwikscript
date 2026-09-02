@@ -82,7 +82,11 @@ import {
 } from "@/lib/vad";
 import { isNetworkError, installFetchRetry } from "@/lib/network";
 import { isWebGpuDeviceLostError } from "@/lib/webgpu";
-import { shouldRetryEmptyParakeetSegment } from "@/lib/parakeetRecovery";
+import {
+  shouldRetryEmptyParakeetSegment,
+  transcribeParakeetAudio,
+  type ParakeetTranscriber,
+} from "@/lib/parakeetRecovery";
 
 /**
  * Weight downloads are the longest-running fetches in the app (over a gigabyte
@@ -232,18 +236,7 @@ let asrDevice: "webgpu" | "wasm" = "wasm";
 /** The part of an onnxruntime InferenceSession we need to free one. */
 type OrtSessionLike = { release?: () => Promise<void> };
 
-type ParakeetInstance = {
-  transcribe: (
-    audio: Float32Array,
-    sampleRate?: number,
-    opts?: {
-      returnTimestamps?: boolean;
-      timeOffset?: number;
-    }
-  ) => Promise<{
-    utterance_text: string;
-    words: Array<{ text: string; start_time: number; end_time: number }>;
-  }>;
+type ParakeetInstance = ParakeetTranscriber & {
   /**
    * parakeet.js has no dispose() of its own — it disposes per-call tensors but
    * never the sessions — so unloading it means releasing these by hand. Optional
@@ -1156,11 +1149,7 @@ async function runParakeet(
     const sliceDuration = slice.length / VAD_SAMPLE_RATE;
     const offsetS = seg.startSample / VAD_SAMPLE_RATE;
 
-    const runSlice = () =>
-      model.transcribe(slice, VAD_SAMPLE_RATE, {
-        returnTimestamps: true,
-        timeOffset: 0,
-      });
+    const runSlice = () => transcribeParakeetAudio(model, slice, VAD_SAMPLE_RATE);
 
     let result: Awaited<ReturnType<ParakeetInstance["transcribe"]>>;
     try {

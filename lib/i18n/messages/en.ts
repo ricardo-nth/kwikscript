@@ -199,7 +199,7 @@ export const en = {
   "progress.loadingMediaEngine": "Loading media engine…",
   "progress.extractingAudio": "Extracting audio…",
   "progress.loadingSpeechModel": "Loading speech model…",
-  "progress.loadingSpeechCache": "Loading speech model from cache…",
+  "progress.loadingSpeechCache": "Loading installed speech model — no download…",
   "progress.downloadingSpeech": "Downloading speech model…",
   "progress.gpuFallback": "GPU interrupted — continuing on CPU…",
   "progress.detectingSpeech": "Detecting speech…",

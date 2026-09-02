@@ -74,7 +74,7 @@ function SettingSlider({
               const next = Number(event.target.value);
               if (Number.isFinite(next)) onChange(next);
             }}
-            className="h-6 w-14 rounded-md border border-zinc-200 bg-white px-1.5 text-right text-[11px] tabular-nums text-zinc-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:focus:border-indigo-500"
+            className="h-6 w-[4.25rem] rounded-md border border-zinc-200 bg-white px-1.5 text-right text-[11px] tabular-nums text-zinc-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:focus:border-indigo-500"
           />
           {suffix && <span aria-hidden="true">{suffix}</span>}
         </label>
@@ -184,11 +184,14 @@ export default function TranscriptToolsMenu() {
         <button
           type="button"
           title={t("tools.restoreFillersTitle")}
-          aria-label={t("tools.restoreFillers")}
           onClick={() => restoreWords(deletedFillerIds)}
-          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+          className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
         >
-          <Undo2 size={13} />
+          <Undo2 size={14} />
+          <span className="hidden min-[480px]:inline">{t("tools.restoreFillers")}</span>
+          <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+            {deletedFillerIds.length}
+          </span>
         </button>
       )}
 
