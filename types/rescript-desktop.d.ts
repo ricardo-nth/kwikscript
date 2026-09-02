@@ -1,4 +1,5 @@
 import type { UiLocale } from "@/lib/i18n/locales";
+import type { Word } from "@/lib/types";
 
 /** Resting sizes the Electron shell switches between. */
 export type WindowMode = "compact" | "expanded";
@@ -16,6 +17,16 @@ export interface DesktopAudioExtraction {
   available: boolean;
   /** Null means the selected media has no audio track. */
   audio?: ArrayBuffer | null;
+}
+
+export interface DesktopCoreMLTranscription {
+  /** False only when the native helper is absent from this build. */
+  available: boolean;
+  words?: Word[];
+  audioDuration?: number;
+  processingTime?: number;
+  realtimeFactor?: number;
+  model?: string;
 }
 
 export interface DesktopMediaExportOptions {
@@ -48,6 +59,8 @@ export interface RescriptDesktop {
   /** Physical memory reported by the host, used to avoid oversized GPU models. */
   systemMemoryBytes: number;
   nativeMediaAvailable: boolean;
+  /** True when this Apple-Silicon build contains the Core ML speech helper. */
+  nativeTranscriptionAvailable: boolean;
   versions: {
     electron: string;
     chrome: string;
@@ -70,6 +83,12 @@ export interface RescriptDesktop {
   ) => Promise<ResolvedDesktopMedia | null>;
   /** Extract mono 16 kHz PCM with native FFmpeg when the desktop host provides it. */
   extractAudio: (path: string) => Promise<DesktopAudioExtraction>;
+  /** Transcribe with the bundled Core ML Parakeet engine. */
+  transcribeCoreML: (
+    path: string,
+    onProgress: (progress: { stage: string; fraction: number }) => void
+  ) => Promise<DesktopCoreMLTranscription>;
+  cancelCoreMLTranscription: () => void;
   /** Render directly from a path-backed source without copying it into Chromium. */
   exportMedia: (
     options: DesktopMediaExportOptions,

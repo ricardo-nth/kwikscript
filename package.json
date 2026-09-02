@@ -23,12 +23,13 @@
     "test:timeline": "tsx tests/serialize-timeline-test.ts",
     "postinstall": "patch-package && node scripts/copy-assets.mjs",
     "build:electron": "node scripts/build-electron.mjs",
+    "build:native:coreml": "node scripts/build-native-coreml.mjs",
     "typecheck:electron": "tsc -p electron/tsconfig.json --noEmit",
     "electron:dev": "npm run build:electron && concurrently -k -n next,electron -c cyan,magenta \"next dev\" \"node scripts/electron-dev.mjs\"",
     "export:web": "cross-env STATIC_EXPORT=1 next build",
     "export:desktop": "cross-env STATIC_EXPORT=1 NEXT_PUBLIC_ELECTRON=1 next build",
-    "dist": "npm run export:desktop && npm run build:electron && electron-builder --config.npmRebuild=false",
-    "release": "npm run export:desktop && npm run build:electron && electron-builder --publish always --config.npmRebuild=false",
+    "dist": "npm run build:native:coreml && npm run export:desktop && npm run build:electron && electron-builder --config.npmRebuild=false",
+    "release": "npm run build:native:coreml && npm run export:desktop && npm run build:electron && electron-builder --publish always --config.npmRebuild=false",
     "cut:patch": "npm version patch -m \"Release v%s\" && git push --follow-tags",
     "cut:minor": "npm version minor -m \"Release v%s\" && git push --follow-tags",
     "cut:major": "npm version major -m \"Release v%s\" && git push --follow-tags",
@@ -78,8 +79,8 @@
     "typescript": "^5"
   },
   "build": {
-    "appId": "io.rescript.app",
-    "productName": "Rescript",
+    "appId": "io.rescript.punchy",
+    "productName": "Rescript Punchy",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -96,7 +97,15 @@
       "out/**/*",
       "package.json",
       "!electron-dist/**/*.map",
+      "!out/vendor/ort{,/**/*}",
+      "!out/vendor/ort-parakeet{,/**/*}",
       "!**/node_modules/**"
+    ],
+    "extraResources": [
+      {
+        "from": "native/coreml-transcriber/.build/release/rescript-coreml-transcriber",
+        "to": "native/rescript-coreml-transcriber"
+      }
     ],
     "asar": true,
     "mac": {
@@ -104,14 +113,12 @@
         {
           "target": "dmg",
           "arch": [
-            "x64",
             "arm64"
           ]
         },
         {
           "target": "zip",
           "arch": [
-            "x64",
             "arm64"
           ]
         }

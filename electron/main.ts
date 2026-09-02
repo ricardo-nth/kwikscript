@@ -19,9 +19,9 @@ import {
   normalize,
 } from "node:path";
 import { pathToFileURL } from "node:url";
-import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { tmpdir } from "node:os";
 import { initMainSentry, setMainTelemetryEnabled } from "./sentry";
 import { initAutoUpdater } from "./updater";
@@ -59,6 +59,7 @@ const MEDIA_EXTENSIONS = [
 /** Source paths are represented by opaque app:// URLs in the renderer. */
 const mediaPaths = new Map<string, string>();
 const exportTempDirs = new Set<string>();
+const nativeTranscriptionJobs = new Map<string, ChildProcess>();
 
 function readableFile(path: unknown): path is string {
   if (typeof path !== "string" || !isAbsolute(path) || !existsSync(path)) return false;
@@ -103,6 +104,142 @@ function nativeFfmpegPath(): string | null {
     process.platform === "linux" ? "/usr/bin/ffmpeg" : undefined,
   ];
   return candidates.find((path): path is string => readableFile(path)) ?? null;
+}
+
+function nativeCoreMLTranscriberPath(): string | null {
+  if (process.platform !== "darwin" || process.arch !== "arm64") return null;
+  const candidates = [
+    process.env.RESCRIPT_COREML_TRANSCRIBER_PATH,
+    isDev
+      ? join(
+          app.getAppPath(),
+          "native",
+          "coreml-transcriber",
+          ".build",
+          "release",
+          "rescript-coreml-transcriber"
+        )
+      : join(process.resourcesPath, "native", "rescript-coreml-transcriber"),
+  ];
+  return candidates.find((path): path is string => readableFile(path)) ?? null;
+}
+
+function runNativeProcess(
+  jobId: string,
+  executable: string,
+  args: string[],
+  onStderr?: (text: string) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args, { stdio: ["ignore", "ignore", "pipe"] });
+    nativeTranscriptionJobs.set(jobId, child);
+    const errors: Buffer[] = [];
+    let errorBytes = 0;
+    child.stderr?.on("data", (chunk: Buffer) => {
+      const text = chunk.toString("utf8");
+      onStderr?.(text);
+      if (errorBytes >= 64 * 1024) return;
+      errors.push(chunk);
+      errorBytes += chunk.byteLength;
+    });
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      if (nativeTranscriptionJobs.get(jobId) === child) {
+        nativeTranscriptionJobs.delete(jobId);
+      }
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      const detail = Buffer.concat(errors).toString("utf8").trim();
+      reject(
+        new Error(
+          signal
+            ? "Native transcription was cancelled."
+            : detail || `Native transcription exited with code ${code ?? "unknown"}.`
+        )
+      );
+    });
+  });
+}
+
+async function transcribeCoreML(
+  jobId: string,
+  mediaPath: string,
+  onProgress: (value: { stage: string; fraction: number }) => void
+) {
+  const ffmpeg = nativeFfmpegPath();
+  const transcriber = nativeCoreMLTranscriberPath();
+  if (!ffmpeg || !transcriber) return { available: false as const };
+
+  const dir = mkdtempSync(join(tmpdir(), "rescript-coreml-"));
+  const audioPath = join(dir, "audio.wav");
+  const outputPath = join(dir, "transcript.json");
+  try {
+    onProgress({ stage: "extracting-audio", fraction: 0 });
+    await runNativeProcess(jobId, ffmpeg, [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      mediaPath,
+      "-map",
+      "0:a:0",
+      "-vn",
+      "-ac",
+      "1",
+      "-ar",
+      "16000",
+      "-c:a",
+      "pcm_s16le",
+      "-y",
+      audioPath,
+    ]);
+    onProgress({ stage: "extracting-audio", fraction: 1 });
+
+    let stderrBuffer = "";
+    await runNativeProcess(jobId, transcriber, [audioPath, outputPath], (text) => {
+      stderrBuffer += text;
+      const lines = stderrBuffer.split("\n");
+      stderrBuffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("RESCRIPT_PROGRESS ")) continue;
+        try {
+          const value = JSON.parse(line.slice("RESCRIPT_PROGRESS ".length)) as {
+            stage?: unknown;
+            fraction?: unknown;
+          };
+          if (
+            typeof value.stage === "string" &&
+            typeof value.fraction === "number" &&
+            Number.isFinite(value.fraction)
+          ) {
+            onProgress({
+              stage: value.stage,
+              fraction: Math.min(1, Math.max(0, value.fraction)),
+            });
+          }
+        } catch {
+          // Other Core ML diagnostics are deliberately ignored.
+        }
+      }
+    });
+
+    const parsed = JSON.parse(readFileSync(outputPath, "utf8")) as {
+      words?: unknown;
+      audioDuration?: unknown;
+      processingTime?: unknown;
+      realtimeFactor?: unknown;
+      model?: unknown;
+    };
+    if (!Array.isArray(parsed.words)) {
+      throw new Error("The native speech model returned an invalid transcript.");
+    }
+    return { available: true as const, ...parsed };
+  } finally {
+    nativeTranscriptionJobs.delete(jobId);
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 async function extractAudioNative(path: string): Promise<ArrayBuffer | null> {
@@ -708,6 +845,13 @@ if (!gotLock) {
   ipcMain.on("media:native-available", (event) => {
     event.returnValue = nativeFfmpegPath() !== null;
   });
+  ipcMain.on("transcription:coreml-available", (event) => {
+    event.returnValue = nativeCoreMLTranscriberPath() !== null;
+  });
+  ipcMain.on("transcription:cancel", (_event, value: unknown) => {
+    if (typeof value !== "string") return;
+    nativeTranscriptionJobs.get(value)?.kill();
+  });
   ipcMain.handle(
     "media:resolve-path",
     async (event, value: unknown, expectedName: unknown) => {
@@ -746,6 +890,18 @@ if (!gotLock) {
     return { available: true, audio };
   });
   ipcMain.handle(
+    "transcription:coreml",
+    async (event, jobId: unknown, value: unknown) => {
+      if (typeof jobId !== "string" || !readableFile(value)) {
+        throw new Error("Invalid native transcription request.");
+      }
+      const channel = `transcription:coreml-progress:${jobId}`;
+      return transcribeCoreML(jobId, value, (progress) => {
+        if (!event.sender.isDestroyed()) event.sender.send(channel, progress);
+      });
+    }
+  );
+  ipcMain.handle(
     "media:export",
     async (event, jobId: unknown, value: unknown) => {
       if (!nativeFfmpegPath()) return { available: false };
@@ -768,6 +924,8 @@ if (!gotLock) {
 
   app.on("before-quit", () => {
     quitting = true;
+    for (const child of nativeTranscriptionJobs.values()) child.kill();
+    nativeTranscriptionJobs.clear();
     for (const dir of exportTempDirs) {
       try {
         rmSync(dir, { recursive: true, force: true });

@@ -6,6 +6,8 @@ import {
 } from "electron";
 import { totalmem } from "node:os";
 
+let activeCoreMLJobId: string | null = null;
+
 /**
  * Minimal bridge for the renderer. Rescript's UI is still a normal web
  * surface; we only expose host metadata so the page can adapt chrome / skip
@@ -16,6 +18,8 @@ contextBridge.exposeInMainWorld("rescriptDesktop", {
   platform: process.platform as NodeJS.Platform,
   systemMemoryBytes: totalmem(),
   nativeMediaAvailable: ipcRenderer.sendSync("media:native-available") === true,
+  nativeTranscriptionAvailable:
+    ipcRenderer.sendSync("transcription:coreml-available") === true,
   versions: {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
@@ -53,6 +57,36 @@ contextBridge.exposeInMainWorld("rescriptDesktop", {
   resolveMediaPath: (path: string, expectedName: string) =>
     ipcRenderer.invoke("media:resolve-path", path, expectedName),
   extractAudio: (path: string) => ipcRenderer.invoke("media:extract-audio", path),
+  transcribeCoreML: async (
+    path: string,
+    onProgress: (progress: { stage: string; fraction: number }) => void
+  ) => {
+    const jobId = crypto.randomUUID();
+    const channel = `transcription:coreml-progress:${jobId}`;
+    const listener = (_event: IpcRendererEvent, value: unknown) => {
+      if (!value || typeof value !== "object") return;
+      const progress = value as { stage?: unknown; fraction?: unknown };
+      if (
+        typeof progress.stage === "string" &&
+        typeof progress.fraction === "number"
+      ) {
+        onProgress({ stage: progress.stage, fraction: progress.fraction });
+      }
+    };
+    activeCoreMLJobId = jobId;
+    ipcRenderer.on(channel, listener);
+    try {
+      return await ipcRenderer.invoke("transcription:coreml", jobId, path);
+    } finally {
+      ipcRenderer.off(channel, listener);
+      if (activeCoreMLJobId === jobId) activeCoreMLJobId = null;
+    }
+  },
+  cancelCoreMLTranscription: () => {
+    if (!activeCoreMLJobId) return;
+    ipcRenderer.send("transcription:cancel", activeCoreMLJobId);
+    activeCoreMLJobId = null;
+  },
   exportMedia: async (
     options: unknown,
     onProgress: (ratio: number) => void

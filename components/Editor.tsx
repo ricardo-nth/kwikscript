@@ -5,7 +5,6 @@ import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panel
 import { useEditorStore } from "@/lib/store";
 import { getCutRanges, isWordCutOut } from "@/lib/edits";
 import { extractAudio, getFFmpeg, releaseFFmpeg } from "@/lib/ffmpeg";
-import { VAD_SAMPLE_RATE } from "@/lib/vad";
 import { isNetworkError } from "@/lib/network";
 import { isElectron } from "@/lib/platform";
 import { reportError } from "@/lib/sentry";
@@ -244,7 +243,7 @@ export default function Editor() {
           s.setStatus("ready");
           s.setProgress({ message: "", value: null });
         } else {
-          transcribe(audio, audio.length / VAD_SAMPLE_RATE);
+          transcribe();
         }
       } catch (err) {
         console.error("Processing pipeline failed:", err);

@@ -361,7 +361,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   duration: 0,
   waveform: null,
   hasAudio: false,
-  source: "base",
+  source: "parakeet",
   transcriptLanguage: DEFAULT_TRANSCRIPT_LANGUAGE,
   pendingTranscript: null,
   projectId: null,
@@ -419,7 +419,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       projectId: null,
       skipTranscription: Boolean(imported),
       skipAudioExtraction: false,
-      source: imported ? "import" : isModelId(current) ? current : "base",
+      source: imported ? "import" : isModelId(current) ? current : "parakeet",
       pendingTranscript: null,
       status: "preparing",
       progress: {

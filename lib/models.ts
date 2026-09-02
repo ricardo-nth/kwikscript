@@ -66,12 +66,7 @@ export type ModelInfo = WhisperModelInfo | ParakeetModelInfo;
 
 /** Display order for model rows in the source dropdown. */
 export const MODEL_ORDER: ModelId[] = [
-  "base",
-  "small",
-  // "medium",
   "parakeet",
-  // "crisperSmall",
-  // "crisperTurbo",
 ];
 
 const WHISPER_DTYPE = {
@@ -214,11 +209,10 @@ export const MODELS: {
     backend: "parakeet",
     id: "parakeet-tdt-0.6b-v3",
     repoId: "ysdede/parakeet-tdt-0.6b-v3-onnx",
-    label: "Parakeet v3",
+    label: "Parakeet Core ML",
     description:
-      "NVIDIA FastConformer — faster on WebGPU, strong EU-language accuracy. Auto-detects language.",
-    // WASM int8 encoder + fp16 decoder ~690 MB; WebGPU fp16 + fp32 ~1.3 GB.
-    size: "~1.3 GB",
+      "Verbatim Parakeet v3 accelerated by the Apple Neural Engine.",
+    size: "~470 MB",
   },
   // crisperSmall: {
   //   backend: "whisper",
@@ -283,16 +277,9 @@ export function isModelId(value: unknown): value is ModelId {
 
 const MODEL_STORAGE_KEY = "rescript.model";
 
-/** Read the last-selected speech model from localStorage (defaults to base). */
+/** Read the speech model for this Apple-Silicon build. */
 export function loadModelPreference(): ModelId {
-  if (typeof window === "undefined") return "base";
-  try {
-    const raw = window.localStorage.getItem(MODEL_STORAGE_KEY);
-    if (isModelId(raw)) return raw;
-  } catch {
-    // private mode / disabled storage
-  }
-  return "base";
+  return "parakeet";
 }
 
 /** Persist the selected speech model for the next visit. */

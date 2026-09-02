@@ -1,118 +1,81 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 import { en } from "@/lib/i18n/messages/en";
-import { isModelId } from "@/lib/models";
 import { reportError } from "@/lib/sentry";
 import { useEditorStore } from "@/lib/store";
 import { trackEvent } from "@/lib/telemetry";
-import type { WorkerResponse } from "@/lib/types";
-import { loadSpeakerDetectionPreference } from "@/lib/speakerPreferences";
-import { shouldPreferMemorySavingAsr } from "@/lib/runtimeCapacity";
 
-let activeWorker: Worker | null = null;
+let activeRun = 0;
 
 /** Stop an in-flight ASR job (e.g. after importing a transcript). */
 export function cancelTranscription() {
-  activeWorker?.terminate();
-  activeWorker = null;
+  activeRun += 1;
+  window.rescriptDesktop?.cancelCoreMLTranscription();
 }
 
-/** Owns the transcription web worker and pipes its messages into the store. */
+/** Runs the Apple-Silicon Core ML transcriber and pipes its result into the store. */
 export function useTranscriber() {
-  const workerRef = useRef<Worker | null>(null);
-
   useEffect(() => {
-    return () => {
-      cancelTranscription();
-      workerRef.current = null;
-    };
+    return () => cancelTranscription();
   }, []);
 
-  const transcribe = useCallback((audio: Float32Array, duration: number) => {
+  const transcribe = useCallback(() => {
     const store = useEditorStore.getState();
-    if (!isModelId(store.source)) {
-      store.setError(en["error.selectModel"]);
+    const desktop = window.rescriptDesktop;
+    const mediaPath = store.mediaPath;
+    if (!desktop?.nativeTranscriptionAvailable || !mediaPath) {
+      store.setError(
+        "Core ML transcription is unavailable. This build requires an Apple-Silicon Mac and the bundled native speech engine."
+      );
       return;
     }
-    const model = store.source;
-    const transcriptLanguage = store.transcriptLanguage;
-    const detectSpeakers = loadSpeakerDetectionPreference();
-    const preferMemorySavingAsr = shouldPreferMemorySavingAsr(
-      window.rescriptDesktop?.systemMemoryBytes
-    );
+
+    cancelTranscription();
+    const run = activeRun;
     store.setStatus("transcribing");
     store.setProgress({ message: en["progress.loadingSpeechModel"], value: null });
 
-    // Always start a fresh worker so a prior cancel can't leave us without one.
-    cancelTranscription();
-    workerRef.current = new Worker(
-      new URL("../workers/transcription.worker.ts", import.meta.url),
-      { type: "module" }
-    );
-    activeWorker = workerRef.current;
-    workerRef.current.onmessage = (event: MessageEvent<WorkerResponse>) => {
-      const s = useEditorStore.getState();
-      // An imported transcript sets skipTranscription; ignore late ASR results.
-      if (s.skipTranscription) return;
-      const msg = event.data;
-      switch (msg.type) {
-        case "progress":
-          s.setProgress({ message: msg.message, value: msg.value });
-          break;
-        case "partial":
-          s.setPartialText(msg.text);
-          break;
-        case "complete":
-          s.setWords(msg.words);
-          s.setStatus("ready");
-          s.setPartialText("");
-          // Which model and language actually get used, to prioritise backends.
-          // Nothing about the media itself — not its length, not the text.
-          trackEvent("transcription_completed", {
-            model,
-            language: transcriptLanguage,
-          });
-          break;
-        case "error":
-          s.setError(msg.message);
-          // A connection that dropped mid-download is the user's network, and
-          // the worker already retried it. There is no stack to act on, so
-          // reporting it only spends quota on an issue we cannot fix.
-          if (msg.cause !== "network") {
-            // Worker errors cross a postMessage boundary, so the original stack
-            // is already gone by here — send the message with a stage tag.
-            reportError(new Error(msg.message), "transcription");
-          }
-          break;
-      }
-    };
-    workerRef.current.onerror = (err) => {
-      const s = useEditorStore.getState();
-      if (s.skipTranscription) return;
-      s.setError(err.message || en["error.workerCrashed"]);
-      reportError(
-        new Error(err.message || en["error.workerCrashed"]),
-        "transcription-worker"
-      );
-    };
-
-    // Transfer, not copy: the worker takes ownership of the PCM and `audio` is
-    // detached here. Nothing on the main thread reads it afterwards — the
-    // waveform draws from the envelope the store built in setAudio — and on a
-    // long recording the copy this replaces was hundreds of megabytes held for
-    // the length of the run.
-    workerRef.current.postMessage(
-      {
-        audio,
-        duration,
-        model,
-        language: transcriptLanguage,
-        detectSpeakers,
-        preferMemorySavingAsr,
-      },
-      [audio.buffer]
-    );
+    void desktop
+      .transcribeCoreML(mediaPath, ({ stage, fraction }) => {
+        if (run !== activeRun) return;
+        const s = useEditorStore.getState();
+        const message =
+          stage === "extracting-audio"
+            ? en["progress.extractingAudio"]
+            : stage === "transcribing"
+              ? en["progress.transcribing"]
+              : en["progress.loadingSpeechModel"];
+        s.setProgress({
+          message,
+          value: fraction > 0 && fraction < 1 ? fraction : null,
+        });
+      })
+      .then((result) => {
+        if (run !== activeRun) return;
+        const s = useEditorStore.getState();
+        if (s.skipTranscription) return;
+        if (!result.available || !result.words) {
+          throw new Error(
+            "The bundled Core ML speech engine is missing from this installation."
+          );
+        }
+        s.setWords(result.words);
+        s.setStatus("ready");
+        s.setPartialText("");
+        trackEvent("transcription_completed", {
+          model: result.model ?? "parakeet-coreml",
+          language: "en",
+        });
+      })
+      .catch((err: unknown) => {
+        if (run !== activeRun) return;
+        const message =
+          err instanceof Error ? err.message : "Core ML transcription failed.";
+        const s = useEditorStore.getState();
+        s.setError(message);
+        reportError(err instanceof Error ? err : new Error(message), "coreml-transcription");
+      });
   }, []);
 
   return { transcribe, cancel: cancelTranscription };
