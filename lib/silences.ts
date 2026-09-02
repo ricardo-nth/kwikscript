@@ -1,5 +1,6 @@
 import { getCutRanges, isWordCutOut } from "./edits";
 import type { ManualCut, TimeRange, Word } from "./types";
+import type { WaveformPeaks } from "./waveform";
 
 /**
  * Minimum gap length (seconds) that counts as a removable silence.
@@ -24,8 +25,12 @@ export function findSilenceCuts(
   manualCuts: ManualCut[]
 ): TimeRange[] {
   const owned = manualCuts.filter((cut) => cut.source === "silence");
-  const candidates = owned.length > 0 ? owned : manualCuts;
-  return candidates
+  if (owned.length > 0) {
+    return owned
+      .filter((cut) => cut.end - cut.start > 1e-4)
+      .map((cut) => ({ start: cut.start, end: cut.end }));
+  }
+  return manualCuts
     .filter(
       (c) =>
         c.end - c.start > 1e-4 &&
@@ -72,6 +77,72 @@ function subtractCuts(range: TimeRange, cuts: TimeRange[]): TimeRange[] {
     });
   }
   return parts;
+}
+
+/** Convert the compact RMS envelope back to an amplitude in the 0..1 range. */
+function rmsAmplitude(value: number): number {
+  return value / 65_535;
+}
+
+/**
+ * Find quiet spans from the audio itself. Word timings are used only to avoid
+ * proposing audio that is already removed by a transcript or manual edit.
+ */
+export function findWaveformSilenceRanges(
+  waveform: WaveformPeaks,
+  words: Word[],
+  duration: number,
+  manualCuts: ManualCut[] = [],
+  threshold = 0.03,
+  minDuration = MIN_SILENCE_DURATION,
+  leftPad = SILENCE_PAD,
+  rightPad = leftPad,
+  maxDuration = Number.POSITIVE_INFINITY
+): TimeRange[] {
+  if (duration <= 0 || waveform.rms.length === 0 || threshold <= 0) return [];
+
+  const frameDuration = waveform.rmsFrameSize / waveform.sampleRate;
+  const cuts = getCutRanges(words, duration, manualCuts);
+  const out: TimeRange[] = [];
+  let quietStart = -1;
+
+  const addQuietRun = (fromFrame: number, toFrame: number) => {
+    const start = Math.max(0, fromFrame * frameDuration);
+    const end = Math.min(duration, toFrame * frameDuration);
+    const quietDuration = end - start;
+    if (
+      quietDuration < minDuration - 1e-4 ||
+      quietDuration > maxDuration + 1e-4
+    ) {
+      return;
+    }
+
+    for (const part of subtractCuts({ start, end }, cuts)) {
+      if (part.end - part.start < minDuration - 1e-4) continue;
+      const touchesLoudAudioOnLeft =
+        fromFrame > 0 && Math.abs(part.start - start) < 1e-4;
+      const touchesLoudAudioOnRight =
+        toFrame < waveform.rms.length && Math.abs(part.end - end) < 1e-4;
+      const paddedStart =
+        part.start + (touchesLoudAudioOnLeft ? Math.max(0, leftPad) : 0);
+      const paddedEnd =
+        part.end - (touchesLoudAudioOnRight ? Math.max(0, rightPad) : 0);
+      if (paddedEnd - paddedStart > 1e-4) {
+        out.push({ start: paddedStart, end: paddedEnd });
+      }
+    }
+  };
+
+  for (let frame = 0; frame < waveform.rms.length; frame++) {
+    const quiet = rmsAmplitude(waveform.rms[frame]!) < threshold;
+    if (quiet && quietStart < 0) quietStart = frame;
+    if (!quiet && quietStart >= 0) {
+      addQuietRun(quietStart, frame);
+      quietStart = -1;
+    }
+  }
+  if (quietStart >= 0) addQuietRun(quietStart, waveform.rms.length);
+  return out;
 }
 
 /**

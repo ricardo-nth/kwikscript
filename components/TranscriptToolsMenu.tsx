@@ -4,7 +4,11 @@ import { useCallback, useId, useMemo, useState } from "react";
 import { Undo2, VolumeX, WandSparkles, Zap, type LucideIcon } from "lucide-react";
 import { useEditorStore } from "@/lib/store";
 import { findDeletedFillerWordIds, findFillerWordIds } from "@/lib/fillers";
-import { findSilenceCuts, findSilenceRanges } from "@/lib/silences";
+import {
+  findSilenceCuts,
+  findSilenceRanges,
+  findWaveformSilenceRanges,
+} from "@/lib/silences";
 import {
   DEFAULT_SILENCE_PREFERENCES,
   LONG_PAUSE_MAX,
@@ -17,6 +21,9 @@ import {
   SILENCE_PAD_MAX,
   SILENCE_PAD_MIN,
   SILENCE_PAD_STEP,
+  SILENCE_THRESHOLD_MAX,
+  SILENCE_THRESHOLD_MIN,
+  SILENCE_THRESHOLD_STEP,
   loadSilencePreferences,
   normalizeSilencePreferences,
   saveSilencePreferences,
@@ -81,6 +88,7 @@ function sameCoreSettings(
   right: SilencePreferences
 ): boolean {
   return (
+    left.threshold === right.threshold &&
     left.minDuration === right.minDuration &&
     left.padStart === right.padStart &&
     left.padEnd === right.padEnd &&
@@ -97,6 +105,8 @@ function SettingSlider({
   max,
   step,
   disabled = false,
+  suffix = "s",
+  formatValue = seconds,
   onChange,
 }: {
   id: string;
@@ -106,9 +116,11 @@ function SettingSlider({
   max: number;
   step: number;
   disabled?: boolean;
+  suffix?: string;
+  formatValue?: (value: number) => string;
   onChange: (value: number) => void;
 }) {
-  const valueText = `${seconds(value)}s`;
+  const valueText = `${formatValue(value)}${suffix}`;
   return (
     <div className={disabled ? "opacity-50" : undefined}>
       <div className="mb-1.5 flex items-center justify-between gap-3">
@@ -134,7 +146,7 @@ function SettingSlider({
             }}
             className="h-6 w-14 rounded-md border border-zinc-200 bg-white px-1.5 text-right text-[11px] tabular-nums text-zinc-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15 disabled:cursor-not-allowed dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:focus:border-indigo-500"
           />
-          <span aria-hidden="true">s</span>
+          {suffix && <span aria-hidden="true">{suffix}</span>}
         </label>
       </div>
       <input
@@ -159,6 +171,7 @@ export default function TranscriptToolsMenu() {
   const words = useEditorStore((state) => state.words);
   const duration = useEditorStore((state) => state.duration);
   const manualCuts = useEditorStore((state) => state.manualCuts);
+  const waveform = useEditorStore((state) => state.waveform);
   const deleteWords = useEditorStore((state) => state.deleteWords);
   const restoreWords = useEditorStore((state) => state.restoreWords);
   const cutSilenceRanges = useEditorStore((state) => state.cutSilenceRanges);
@@ -169,6 +182,7 @@ export default function TranscriptToolsMenu() {
     loadSilencePreferences
   );
   const panelId = useId();
+  const thresholdId = useId();
   const minDurationId = useId();
   const leftPadId = useId();
   const rightPadId = useId();
@@ -193,18 +207,32 @@ export default function TranscriptToolsMenu() {
 
   const silenceRanges = useMemo(
     () =>
-      findSilenceRanges(
-        words,
-        duration,
-        manualCuts,
-        preferences.minDuration,
-        preferences.padStart,
-        preferences.padEnd,
-        preferences.protectLongPauses
-          ? preferences.maxDuration
-          : Number.POSITIVE_INFINITY
-      ),
-    [words, duration, manualCuts, preferences]
+      waveform
+        ? findWaveformSilenceRanges(
+            waveform,
+            words,
+            duration,
+            manualCuts,
+            preferences.threshold,
+            preferences.minDuration,
+            preferences.padStart,
+            preferences.padEnd,
+            preferences.protectLongPauses
+              ? preferences.maxDuration
+              : Number.POSITIVE_INFINITY
+          )
+        : findSilenceRanges(
+            words,
+            duration,
+            manualCuts,
+            preferences.minDuration,
+            preferences.padStart,
+            preferences.padEnd,
+            preferences.protectLongPauses
+              ? preferences.maxDuration
+              : Number.POSITIVE_INFINITY
+          ),
+    [waveform, words, duration, manualCuts, preferences]
   );
 
   const ctx = useMemo<ToolContext>(
@@ -264,7 +292,7 @@ export default function TranscriptToolsMenu() {
           id={panelId}
           role="dialog"
           aria-label={t("common.tools")}
-          className="z-40 w-[19rem] max-w-[calc(100vw-1rem)] overflow-hidden"
+          className="z-40 max-h-[calc(100vh-1rem)] w-[19rem] max-w-[calc(100vw-1rem)] overflow-y-auto"
         >
           {availableInstantTools.length > 0 && (
             <section className="border-b border-zinc-100 p-1.5 dark:border-zinc-800">
@@ -343,6 +371,27 @@ export default function TranscriptToolsMenu() {
             </div>
 
             <div className="space-y-3.5">
+              <div>
+                <SettingSlider
+                  id={thresholdId}
+                  label={t("tools.loudnessThreshold")}
+                  value={preferences.threshold}
+                  min={SILENCE_THRESHOLD_MIN}
+                  max={SILENCE_THRESHOLD_MAX}
+                  step={SILENCE_THRESHOLD_STEP}
+                  suffix=""
+                  formatValue={(value) =>
+                    value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")
+                  }
+                  onChange={(threshold) =>
+                    updatePreferences((current) => ({ ...current, threshold }))
+                  }
+                />
+                <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
+                  {t("tools.loudnessThresholdHelp")}
+                </p>
+              </div>
+
               <SettingSlider
                 id={minDurationId}
                 label={t("tools.minimumPause")}

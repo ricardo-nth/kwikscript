@@ -2,12 +2,14 @@ import {
   addSilenceCuts,
   findSilenceCuts,
   findSilenceRanges,
+  findWaveformSilenceRanges,
   MIN_SILENCE_DURATION,
   removeOwnedSilenceCuts,
   SILENCE_PAD,
 } from "../lib/silences";
 import type { ManualCut, Word } from "../lib/types";
 import { addManualCut } from "../lib/edits";
+import { buildWaveformPeaks } from "../lib/waveform";
 
 function nearly(a: number, b: number, eps = 1e-4): boolean {
   return Math.abs(a - b) < eps;
@@ -24,6 +26,88 @@ function w(
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(msg);
+}
+
+function toneSectionAudio(): Float32Array {
+  const sampleRate = 16_000;
+  const audio = new Float32Array(sampleRate);
+  for (let i = 0; i < audio.length; i++) {
+    const t = i / sampleRate;
+    const amplitude = t >= 0.2 && t < 0.5 ? 0.01 : 0.1;
+    audio[i] = Math.sin(2 * Math.PI * 200 * t) * amplitude;
+  }
+  return audio;
+}
+
+{
+  // Loudness, rather than transcript boundaries, locates the quiet tail.
+  const waveform = buildWaveformPeaks(toneSectionAudio());
+  const words = [w(1, 0, 0.25), w(2, 0.45, 1)];
+  const ranges = findWaveformSilenceRanges(
+    waveform,
+    words,
+    1,
+    [],
+    0.03,
+    0.13,
+    0,
+    0
+  );
+  assert(ranges.length === 1, `expected one waveform silence, got ${ranges.length}`);
+  assert(nearly(ranges[0]!.start, 0.2) && nearly(ranges[0]!.end, 0.5), "waveform boundaries");
+
+  const belowNoiseFloor = findWaveformSilenceRanges(
+    waveform,
+    words,
+    1,
+    [],
+    0.005,
+    0.13,
+    0,
+    0
+  );
+  assert(belowNoiseFloor.length === 0, "lower threshold should retain the quiet audio");
+
+  const padded = findWaveformSilenceRanges(
+    waveform,
+    words,
+    1,
+    [],
+    0.03,
+    0.13,
+    0.02,
+    0.03
+  );
+  assert(nearly(padded[0]!.start, 0.22) && nearly(padded[0]!.end, 0.47), "waveform padding");
+  console.log("waveform threshold and padding: ok");
+}
+
+{
+  // Existing edits are never proposed again, and waveform cuts share the same
+  // owned restore path as transcript-gap silence cuts.
+  const waveform = buildWaveformPeaks(toneSectionAudio());
+  const manual: ManualCut[] = [{ id: 1, start: 0.2, end: 0.35 }];
+  const ranges = findWaveformSilenceRanges(
+    waveform,
+    [],
+    1,
+    manual,
+    0.03,
+    0.13,
+    0,
+    0
+  );
+  assert(ranges.length === 1, "remaining quiet audio should still be found");
+  assert(nearly(ranges[0]!.start, 0.35) && nearly(ranges[0]!.end, 0.5), "existing cut subtracted");
+  const added = addSilenceCuts(manual, ranges, 2);
+  const overlappingWords = [w(1, 0, 0.25), w(2, 0.45, 1)];
+  assert(
+    findSilenceCuts(overlappingWords, added.cuts).length === 1,
+    "owned waveform cut remains restorable despite loose word timestamps"
+  );
+  const restored = removeOwnedSilenceCuts(added.cuts);
+  assert(restored.length === 1 && restored[0]!.id === 1, "unified restore preserves manual cut");
+  console.log("waveform silence restore ownership: ok");
 }
 
 {

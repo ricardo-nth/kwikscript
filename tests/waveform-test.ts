@@ -30,6 +30,24 @@ function tone(seconds: number, freq: number, amp: (t: number) => number): Float3
   console.log("2s bucketSize:", peaks.bucketSize, "buckets:", peaks.min.length);
   if (peaks.bucketSize !== 1) throw new Error("short audio should not be downsampled");
   if (peaks.sampleCount !== audio.length) throw new Error("sampleCount mismatch");
+  if (peaks.sampleRate !== SR) throw new Error("sample rate mismatch");
+  if (peaks.rmsFrameSize !== 160) throw new Error("RMS should use 10 ms frames");
+  if (peaks.rms.length !== 200) throw new Error("RMS frame count mismatch");
+}
+
+{
+  // The loudness envelope preserves actual RMS amplitude while digital silence
+  // stays at zero. A constant signal makes the expected RMS exact.
+  const audio = new Float32Array(SR * 0.04);
+  audio.fill(0.03, SR * 0.01, SR * 0.03);
+  const peaks = buildWaveformPeaks(audio);
+  const amplitudes = Array.from(peaks.rms, (value) => value / 65_535);
+  if (amplitudes[0] !== 0 || amplitudes[3] !== 0) {
+    throw new Error("digital silence should have zero RMS");
+  }
+  if (Math.abs(amplitudes[1]! - 0.03) > 2 / 65_535) {
+    throw new Error(`RMS amplitude drifted: ${amplitudes[1]}`);
+  }
 }
 
 {

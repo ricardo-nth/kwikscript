@@ -14,6 +14,8 @@
  */
 
 export interface WaveformPeaks {
+  /** Sample rate used to convert envelope frames back to media time. */
+  sampleRate: number;
   /** Source samples summarised by each min/max pair. */
   bucketSize: number;
   /** Length of the audio this was built from, in samples. */
@@ -21,7 +23,14 @@ export interface WaveformPeaks {
   /** Per-bucket extremes, quantised to signed bytes. */
   min: Int8Array;
   max: Int8Array;
+  /** Samples represented by each RMS loudness frame. */
+  rmsFrameSize: number;
+  /** Per-frame RMS amplitude in 0..1, quantised to unsigned 16-bit values. */
+  rms: Uint16Array;
 }
+
+export const WAVEFORM_SAMPLE_RATE = 16_000;
+export const RMS_FRAME_DURATION = 0.01;
 
 /**
  * Envelope resolution ceiling — about 4 MB at two bytes per bucket.
@@ -40,6 +49,10 @@ function quantise(v: number): number {
   return Math.round(clamped * 127);
 }
 
+function quantiseRms(v: number): number {
+  return Math.round(Math.min(1, Math.max(0, v)) * 65_535);
+}
+
 /**
  * Summarise `audio` into a min/max envelope.
  *
@@ -49,28 +62,45 @@ function quantise(v: number): number {
  */
 export function buildWaveformPeaks(
   audio: Float32Array,
-  maxBuckets = MAX_BUCKETS
+  maxBuckets = MAX_BUCKETS,
+  sampleRate = WAVEFORM_SAMPLE_RATE
 ): WaveformPeaks {
   const sampleCount = audio.length;
   const bucketSize = Math.max(1, Math.ceil(sampleCount / Math.max(1, maxBuckets)));
   const buckets = Math.ceil(sampleCount / bucketSize);
   const min = new Int8Array(buckets);
   const max = new Int8Array(buckets);
+  const rmsFrameSize = Math.max(1, Math.round(sampleRate * RMS_FRAME_DURATION));
+  const rms = new Uint16Array(Math.ceil(sampleCount / rmsFrameSize));
 
-  for (let b = 0; b < buckets; b++) {
-    const from = b * bucketSize;
-    const to = Math.min(sampleCount, from + bucketSize);
-    let lo = 0;
-    let hi = 0;
-    for (let i = from; i < to; i++) {
-      const v = audio[i];
-      if (v < lo) lo = v;
-      else if (v > hi) hi = v;
+  let bucket = 0;
+  let lo = 0;
+  let hi = 0;
+  let rmsFrame = 0;
+  let sumSquares = 0;
+  let rmsSamples = 0;
+  for (let i = 0; i < sampleCount; i++) {
+    const value = audio[i];
+    if (value < lo) lo = value;
+    else if (value > hi) hi = value;
+    sumSquares += value * value;
+    rmsSamples++;
+
+    if ((i + 1) % bucketSize === 0 || i + 1 === sampleCount) {
+      min[bucket] = quantise(lo);
+      max[bucket] = quantise(hi);
+      bucket++;
+      lo = 0;
+      hi = 0;
     }
-    min[b] = quantise(lo);
-    max[b] = quantise(hi);
+    if ((i + 1) % rmsFrameSize === 0 || i + 1 === sampleCount) {
+      rms[rmsFrame] = quantiseRms(Math.sqrt(sumSquares / rmsSamples));
+      rmsFrame++;
+      sumSquares = 0;
+      rmsSamples = 0;
+    }
   }
-  return { bucketSize, sampleCount, min, max };
+  return { sampleRate, bucketSize, sampleCount, min, max, rmsFrameSize, rms };
 }
 
 /**

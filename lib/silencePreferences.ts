@@ -15,8 +15,15 @@ export const LONG_PAUSE_MIN = 0.5;
 export const LONG_PAUSE_MAX = 10;
 export const LONG_PAUSE_STEP = 0.1;
 export const DEFAULT_LONG_PAUSE_LIMIT = 2.5;
+export const SILENCE_THRESHOLD_MIN = 0;
+// Speech below 0.1 (-20 dBFS peak-equivalent) is already very quiet; keeping
+// the useful range compact makes the native slider precise around 0.03.
+export const SILENCE_THRESHOLD_MAX = 0.1;
+export const SILENCE_THRESHOLD_STEP = 0.001;
 
 export interface SilencePreferences {
+  /** RMS amplitude below which audio is treated as silent. */
+  threshold: number;
   /** Gaps shorter than this stay untouched. */
   minDuration: number;
   /** Existing quiet audio retained after the speech on the left of a cut. */
@@ -29,6 +36,7 @@ export interface SilencePreferences {
 }
 
 export const DEFAULT_SILENCE_PREFERENCES: SilencePreferences = {
+  threshold: 0.03,
   minDuration: MIN_SILENCE_DURATION,
   padStart: SILENCE_PAD,
   padEnd: SILENCE_PAD,
@@ -38,6 +46,7 @@ export const DEFAULT_SILENCE_PREFERENCES: SilencePreferences = {
 
 /** Matches the ReCut settings supplied for fast short-form delivery. */
 export const PUNCHY_SILENCE_PREFERENCES: SilencePreferences = {
+  threshold: 0.03,
   minDuration: 0.13,
   padStart: 0,
   padEnd: 0,
@@ -71,6 +80,11 @@ export function normalizeSilencePreferences(
     LONG_PAUSE_MAX
   );
   return {
+    threshold: clamp(
+      finiteNumber(value?.threshold, DEFAULT_SILENCE_PREFERENCES.threshold),
+      SILENCE_THRESHOLD_MIN,
+      SILENCE_THRESHOLD_MAX
+    ),
     minDuration,
     padStart: clamp(
       finiteNumber(
