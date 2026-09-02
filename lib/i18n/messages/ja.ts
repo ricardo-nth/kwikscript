@@ -91,6 +91,8 @@ export const ja: Record<MessageKey, string> = {
   "tools.loudnessThresholdHelp": "この値より小さい音声を無音として扱います。",
   "tools.minimumPause": "最短の間",
   "tools.durationRange": "長さの範囲",
+  "tools.durationUpTo": "以下",
+  "tools.durationBetween": "範囲指定",
   "tools.minimumDuration": "最短",
   "tools.maximumDuration": "最長",
   "tools.padding": "余白",

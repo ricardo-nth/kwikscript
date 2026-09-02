@@ -91,6 +91,8 @@ export const de: Record<MessageKey, string> = {
   "tools.loudnessThresholdHelp": "Audio unter diesem Wert gilt als still.",
   "tools.minimumPause": "Mindestpause",
   "tools.durationRange": "Dauerbereich",
+  "tools.durationUpTo": "Bis",
+  "tools.durationBetween": "Zwischen",
   "tools.minimumDuration": "Minimum",
   "tools.maximumDuration": "Maximum",
   "tools.padding": "Abstand",

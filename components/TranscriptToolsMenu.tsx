@@ -24,6 +24,7 @@ import {
   loadSilencePreferences,
   normalizeSilencePreferences,
   saveSilencePreferences,
+  silenceDurationBounds,
   type SilencePreferences,
 } from "@/lib/silencePreferences";
 import Popover, { PopoverContent, PopoverTrigger } from "./Popover";
@@ -127,29 +128,36 @@ export default function TranscriptToolsMenu() {
     []
   );
 
+  const durationBounds = useMemo(
+    () => silenceDurationBounds(preferences),
+    [preferences]
+  );
+
   const silenceRanges = useMemo(
-    () => waveform
-      ? findWaveformSilenceRanges(
-          waveform,
-          words,
-          duration,
-          manualCuts,
-          preferences.threshold,
-          preferences.minDuration,
-          preferences.padStart,
-          preferences.padEnd,
-          preferences.maxDuration
-        )
-      : findSilenceRanges(
-          words,
-          duration,
-          manualCuts,
-          preferences.minDuration,
-          preferences.padStart,
-          preferences.padEnd,
-          preferences.maxDuration
-        ),
-    [waveform, words, duration, manualCuts, preferences]
+    () => {
+      return waveform
+        ? findWaveformSilenceRanges(
+            waveform,
+            words,
+            duration,
+            manualCuts,
+            preferences.threshold,
+            durationBounds.minDuration,
+            preferences.padStart,
+            preferences.padEnd,
+            durationBounds.maxDuration
+          )
+        : findSilenceRanges(
+            words,
+            duration,
+            manualCuts,
+            durationBounds.minDuration,
+            preferences.padStart,
+            preferences.padEnd,
+            durationBounds.maxDuration
+          );
+    },
+    [waveform, words, duration, manualCuts, preferences, durationBounds]
   );
 
   useEffect(() => {
@@ -164,23 +172,7 @@ export default function TranscriptToolsMenu() {
 
   return (
     <div className="flex shrink-0 items-center gap-0.5">
-      <button
-        type="button"
-        disabled={fillerIds.length === 0}
-        title={t("tools.removeFillersTitle")}
-        onClick={() => deleteWords(fillerIds)}
-        className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent dark:text-zinc-400 dark:hover:bg-zinc-800 dark:disabled:text-zinc-600"
-      >
-        <WandSparkles size={14} />
-        <span className="hidden min-[480px]:inline">{t("tools.removeFillers")}</span>
-        {fillerIds.length > 0 && (
-          <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-            {fillerIds.length}
-          </span>
-        )}
-      </button>
-
-      {deletedFillerIds.length > 0 && (
+      {deletedFillerIds.length > 0 ? (
         <button
           type="button"
           title={t("tools.restoreFillersTitle")}
@@ -193,6 +185,22 @@ export default function TranscriptToolsMenu() {
             {deletedFillerIds.length}
           </span>
         </button>
+      ) : (
+        <button
+          type="button"
+          disabled={fillerIds.length === 0}
+          title={t("tools.removeFillersTitle")}
+          onClick={() => deleteWords(fillerIds)}
+          className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent dark:text-zinc-400 dark:hover:bg-zinc-800 dark:disabled:text-zinc-600"
+        >
+          <WandSparkles size={14} />
+          <span className="hidden min-[480px]:inline">{t("tools.removeFillers")}</span>
+          {fillerIds.length > 0 && (
+            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+              {fillerIds.length}
+            </span>
+          )}
+        </button>
       )}
 
       <Popover open={open} onOpenChange={setOpen} placement="bottom-end" backdrop>
@@ -204,8 +212,8 @@ export default function TranscriptToolsMenu() {
               aria-expanded={open}
               aria-controls={panelId}
               title={t("tools.removeSilencesTitle", {
-                min: seconds(preferences.minDuration),
-                max: seconds(preferences.maxDuration),
+                min: seconds(durationBounds.minDuration),
+                max: seconds(durationBounds.maxDuration),
               })}
               onClick={() => setOpen((value) => !value)}
               className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:text-zinc-400 dark:hover:bg-zinc-800"
@@ -268,26 +276,63 @@ export default function TranscriptToolsMenu() {
                   <p className="mb-1.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
                     {t("tools.durationRange")}
                   </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <SettingSlider
-                      id={minDurationId}
-                      label={t("tools.minimumDuration")}
-                      value={preferences.minDuration}
-                      min={SILENCE_DURATION_MIN}
-                      max={SILENCE_DURATION_MAX}
-                      step={SILENCE_DURATION_STEP}
-                      onChange={(minDuration) => updatePreferences((current) => ({ ...current, minDuration }))}
-                    />
+                  <div
+                    role="radiogroup"
+                    aria-label={t("tools.durationRange")}
+                    className="mb-2.5 grid grid-cols-2 gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
+                  >
+                    {(["upTo", "between"] as const).map((durationMode) => {
+                      const selected = preferences.durationMode === durationMode;
+                      return (
+                        <button
+                          key={durationMode}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => updatePreferences((current) => ({ ...current, durationMode }))}
+                          className={`flex h-7 cursor-pointer items-center justify-center rounded-md px-2 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 ${
+                            selected
+                              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-50"
+                              : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+                          }`}
+                        >
+                          {t(durationMode === "upTo" ? "tools.durationUpTo" : "tools.durationBetween")}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {preferences.durationMode === "upTo" ? (
                     <SettingSlider
                       id={maxDurationId}
-                      label={t("tools.maximumDuration")}
+                      label={t("tools.longestPauseToRemove")}
                       value={preferences.maxDuration}
-                      min={preferences.minDuration}
+                      min={SILENCE_DURATION_MIN}
                       max={SILENCE_MAX_DURATION_MAX}
                       step={SILENCE_MAX_DURATION_STEP}
                       onChange={(maxDuration) => updatePreferences((current) => ({ ...current, maxDuration }))}
                     />
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <SettingSlider
+                        id={minDurationId}
+                        label={t("tools.minimumDuration")}
+                        value={preferences.minDuration}
+                        min={SILENCE_DURATION_MIN}
+                        max={SILENCE_DURATION_MAX}
+                        step={SILENCE_DURATION_STEP}
+                        onChange={(minDuration) => updatePreferences((current) => ({ ...current, minDuration }))}
+                      />
+                      <SettingSlider
+                        id={maxDurationId}
+                        label={t("tools.maximumDuration")}
+                        value={preferences.maxDuration}
+                        min={preferences.minDuration}
+                        max={SILENCE_MAX_DURATION_MAX}
+                        step={SILENCE_MAX_DURATION_STEP}
+                        onChange={(maxDuration) => updatePreferences((current) => ({ ...current, maxDuration }))}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>

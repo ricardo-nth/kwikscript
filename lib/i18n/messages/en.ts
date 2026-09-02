@@ -90,6 +90,8 @@ export const en = {
   "tools.loudnessThresholdHelp": "Audio below this level is treated as silent.",
   "tools.minimumPause": "Minimum pause",
   "tools.durationRange": "Duration range",
+  "tools.durationUpTo": "Up to",
+  "tools.durationBetween": "Between",
   "tools.minimumDuration": "Minimum",
   "tools.maximumDuration": "Maximum",
   "tools.padding": "Padding",

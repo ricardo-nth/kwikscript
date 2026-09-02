@@ -5,6 +5,7 @@ import {
   SILENCE_PAD_MAX,
   SILENCE_THRESHOLD_MAX,
   normalizeSilencePreferences,
+  silenceDurationBounds,
 } from "../lib/silencePreferences";
 
 function assert(value: unknown, message: string): asserts value {
@@ -36,6 +37,32 @@ function assert(value: unknown, message: string): asserts value {
   assert(range.minDuration === 0.13 && range.maxDuration === 0.4, "duration range retained");
   const crossed = normalizeSilencePreferences({ minDuration: 0.7, maxDuration: 0.2 });
   assert(crossed.maxDuration === crossed.minDuration, "maximum cannot cross minimum");
+}
+
+{
+  const upTo = normalizeSilencePreferences({
+    durationMode: "upTo",
+    minDuration: 0.7,
+    maxDuration: 0.13,
+  });
+  const bounds = silenceDurationBounds(upTo);
+  assert(upTo.maxDuration === 0.13, "up-to maximum is independent of between minimum");
+  assert(bounds.minDuration === SILENCE_DURATION_MIN, "up-to starts at practical floor");
+  assert(bounds.maxDuration === 0.13, "up-to uses the selected ceiling");
+
+  const between = normalizeSilencePreferences({
+    durationMode: "between",
+    minDuration: 0.4,
+    maxDuration: 0.8,
+  });
+  const betweenBounds = silenceDurationBounds(between);
+  assert(
+    betweenBounds.minDuration === 0.4 && betweenBounds.maxDuration === 0.8,
+    "between keeps both selected bounds"
+  );
+
+  const legacy = normalizeSilencePreferences({ minDuration: 0.2, maxDuration: 0.6 });
+  assert(legacy.durationMode === "between", "existing saved ranges migrate to between");
 }
 
 {

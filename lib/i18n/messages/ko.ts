@@ -91,6 +91,8 @@ export const ko: Record<MessageKey, string> = {
   "tools.loudnessThresholdHelp": "이 값보다 작은 오디오는 무음으로 처리됩니다.",
   "tools.minimumPause": "최소 멈춤",
   "tools.durationRange": "길이 범위",
+  "tools.durationUpTo": "이하",
+  "tools.durationBetween": "사이",
   "tools.minimumDuration": "최소",
   "tools.maximumDuration": "최대",
   "tools.padding": "여백",

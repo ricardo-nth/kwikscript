@@ -91,6 +91,8 @@ export const pt: Record<MessageKey, string> = {
   "tools.loudnessThresholdHelp": "Áudio abaixo deste nível é tratado como silêncio.",
   "tools.minimumPause": "Pausa mínima",
   "tools.durationRange": "Faixa de duração",
+  "tools.durationUpTo": "Até",
+  "tools.durationBetween": "Entre",
   "tools.minimumDuration": "Mínimo",
   "tools.maximumDuration": "Máximo",
   "tools.padding": "Margem",

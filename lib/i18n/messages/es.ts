@@ -91,6 +91,8 @@ export const es: Record<MessageKey, string> = {
   "tools.loudnessThresholdHelp": "El audio por debajo de este nivel se considera silencio.",
   "tools.minimumPause": "Pausa mínima",
   "tools.durationRange": "Rango de duración",
+  "tools.durationUpTo": "Hasta",
+  "tools.durationBetween": "Entre",
   "tools.minimumDuration": "Mínimo",
   "tools.maximumDuration": "Máximo",
   "tools.padding": "Margen",

@@ -20,6 +20,8 @@ export const SILENCE_THRESHOLD_MIN = 0;
 export const SILENCE_THRESHOLD_MAX = 0.1;
 export const SILENCE_THRESHOLD_STEP = 0.001;
 
+export type SilenceDurationMode = "upTo" | "between";
+
 export interface SilencePreferences {
   /** RMS amplitude below which audio is treated as silent. */
   threshold: number;
@@ -31,6 +33,8 @@ export interface SilencePreferences {
   padEnd: number;
   /** Gaps longer than this stay untouched. */
   maxDuration: number;
+  /** Whether duration matching starts at the practical floor or a chosen minimum. */
+  durationMode: SilenceDurationMode;
 }
 
 export const DEFAULT_SILENCE_PREFERENCES: SilencePreferences = {
@@ -39,6 +43,7 @@ export const DEFAULT_SILENCE_PREFERENCES: SilencePreferences = {
   padStart: SILENCE_PAD,
   padEnd: SILENCE_PAD,
   maxDuration: DEFAULT_SILENCE_MAX_DURATION,
+  durationMode: "between",
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -56,6 +61,10 @@ export function normalizeSilencePreferences(
     | null
     | undefined
 ): SilencePreferences {
+  const durationMode: SilenceDurationMode =
+    value?.durationMode === "upTo" || value?.durationMode === "between"
+      ? value.durationMode
+      : DEFAULT_SILENCE_PREFERENCES.durationMode;
   const minDuration = clamp(
     finiteNumber(value?.minDuration, DEFAULT_SILENCE_PREFERENCES.minDuration),
     SILENCE_DURATION_MIN,
@@ -63,7 +72,7 @@ export function normalizeSilencePreferences(
   );
   const maxDuration = clamp(
     finiteNumber(value?.maxDuration, DEFAULT_SILENCE_PREFERENCES.maxDuration),
-    minDuration,
+    durationMode === "between" ? minDuration : SILENCE_DURATION_MIN,
     SILENCE_MAX_DURATION_MAX
   );
   return {
@@ -90,7 +99,24 @@ export function normalizeSilencePreferences(
       SILENCE_PAD_MAX
     ),
     maxDuration,
+    durationMode,
   };
+}
+
+/** Duration bounds passed to silence detection for the selected UI mode. */
+export function silenceDurationBounds(preferences: SilencePreferences): {
+  minDuration: number;
+  maxDuration: number;
+} {
+  return preferences.durationMode === "upTo"
+    ? {
+        minDuration: SILENCE_DURATION_MIN,
+        maxDuration: preferences.maxDuration,
+      }
+    : {
+        minDuration: preferences.minDuration,
+        maxDuration: preferences.maxDuration,
+      };
 }
 
 export function loadSilencePreferences(): SilencePreferences {

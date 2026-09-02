@@ -91,6 +91,8 @@ export const zhTW: Record<MessageKey, string> = {
   "tools.loudnessThresholdHelp": "低於此值的音訊將視為靜音。",
   "tools.minimumPause": "最短停頓",
   "tools.durationRange": "時長範圍",
+  "tools.durationUpTo": "不超過",
+  "tools.durationBetween": "介於",
   "tools.minimumDuration": "最短",
   "tools.maximumDuration": "最長",
   "tools.padding": "留白",
