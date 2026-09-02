@@ -20,6 +20,10 @@ export const ja: Record<MessageKey, string> = {
   "settings.light": "ライト",
   "settings.dark": "ダーク",
   "settings.interfaceLanguage": "表示言語",
+  "settings.transcription": "文字起こし",
+  "settings.detectSpeakers": "複数の話者を検出",
+  "settings.detectSpeakersHelp":
+    "音声全体の解析処理が追加されます。1人で話す動画ではオフのままにしてください。",
   "settings.privacy": "プライバシー",
   "settings.helpImprove": "アプリの改善に協力",
   "settings.telemetryHelp": "匿名の機能利用統計とクラッシュレポートを送信します。",
@@ -161,7 +165,7 @@ export const ja: Record<MessageKey, string> = {
   "export.transcriptHelp": "話者ラベル付きテキスト。カット部分は除外され、タイムスタンプはありません。",
   "export.subtitlesHelp":
     "SRT と VTT は編集後のタイムライン（カット適用済み）を使用します。JSON は再インポート用に完全な単語リストを保持します。",
-  "export.encodingHelp": "ffmpeg.wasm で再エンコード中 — 長いファイルは時間がかかります。",
+  "export.encodingHelp": "ローカルで再エンコード中です。長いファイルは時間がかかります。",
   "export.reexport": "最新の編集で再書き出し",
   "export.rendering": "ブラウザでレンダリング中…",
   "export.downloadFile": "{name} をダウンロード",
@@ -219,6 +223,8 @@ export const ja: Record<MessageKey, string> = {
   "error.nothingToExport": "すべて削除されています — 書き出すものがありません。",
   "error.videoExport": "動画のレンダリング中に書き出しに失敗しました。",
   "error.audioExport": "音声のレンダリング中に書き出しに失敗しました。",
+  "error.nativeMediaUnavailable":
+    "この保存済みプロジェクトのレンダリングにはデスクトップのメディアエンジンが必要です。タイムラインの書き出しは引き続き利用できます。",
   "error.export": "書き出しに失敗しました。",
   "error.timelineExport": "タイムラインの書き出しに失敗しました。",
   "error.timelineEmpty": "タイムラインに配置するものがありません。",
@@ -229,6 +235,8 @@ export const ja: Record<MessageKey, string> = {
   "error.jsonShape": 'JSON は単語配列、または { "words": [...] } である必要があります。',
   "error.noWords": "書き出す単語がありません。",
   "error.projectMissing": "そのプロジェクトはもう保存されていません。",
+  "error.projectSourceMissing":
+    "このプロジェクトを再度開くには、元のメディアファイルが必要です。",
   "error.openProject": "そのプロジェクトを開けませんでした。",
   "error.removeProject": "そのプロジェクトを削除できませんでした。",
   "error.readTranscript": "その文字起こしを読み込めませんでした。",

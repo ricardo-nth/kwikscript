@@ -19,6 +19,10 @@ export const en = {
   "settings.light": "Light",
   "settings.dark": "Dark",
   "settings.interfaceLanguage": "Interface language",
+  "settings.transcription": "Transcription",
+  "settings.detectSpeakers": "Detect multiple speakers",
+  "settings.detectSpeakersHelp":
+    "Adds a full audio-analysis pass. Leave off for single-speaker videos.",
   "settings.privacy": "Privacy",
   "settings.helpImprove": "Help improve the app",
   "settings.telemetryHelp": "Send anonymous feature usage statistics and crash reports.",
@@ -160,7 +164,7 @@ export const en = {
   "export.transcriptHelp": "Speaker-labeled text with cuts removed. No timestamps.",
   "export.subtitlesHelp":
     "SRT and VTT use the edited timeline (cuts applied). JSON keeps the full word list for re-import.",
-  "export.encodingHelp": "Re-encoding with ffmpeg.wasm — longer files take a while.",
+  "export.encodingHelp": "Re-encoding locally — longer files take a while.",
   "export.reexport": "Re-export with latest edits",
   "export.rendering": "Rendering in your browser…",
   "export.downloadFile": "Download {name}",
@@ -219,6 +223,8 @@ export const en = {
   "error.nothingToExport": "Everything has been deleted — nothing to export.",
   "error.videoExport": "Export failed while rendering the video.",
   "error.audioExport": "Export failed while rendering the audio.",
+  "error.nativeMediaUnavailable":
+    "This saved project needs the desktop media engine to render video or audio. Timeline export is still available.",
   "error.export": "Export failed.",
   "error.timelineExport": "Timeline export failed.",
   "error.timelineEmpty": "Nothing to put on the timeline.",
@@ -229,6 +235,8 @@ export const en = {
   "error.jsonShape": 'JSON must be a word array or { "words": [...] }.',
   "error.noWords": "No words to export.",
   "error.projectMissing": "That project is no longer saved.",
+  "error.projectSourceMissing":
+    "The original media file is needed to reopen this project.",
   "error.openProject": "Could not open that project.",
   "error.removeProject": "Could not remove that project.",
   "error.readTranscript": "Could not read that transcript.",

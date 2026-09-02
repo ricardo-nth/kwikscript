@@ -21,6 +21,10 @@ import {
   UI_LOCALE_META,
   isUiLocalePreference,
 } from "@/lib/i18n";
+import {
+  loadSpeakerDetectionPreference,
+  saveSpeakerDetectionPreference,
+} from "@/lib/speakerPreferences";
 
 const MENU_LINKS = [
   { labelKey: "settings.support", href: DISCORD_INVITE_URL, Icon: DiscordIcon },
@@ -44,6 +48,9 @@ export default function SettingsMenu() {
   const { appearance, setAppearance } = useAppearance();
   const { enabled: telemetry, setEnabled: setTelemetry } = useTelemetryPref();
   const { t, preference, setPreference } = useI18n();
+  const [detectSpeakers, setDetectSpeakers] = useState(
+    loadSpeakerDetectionPreference
+  );
 
   return (
     <Popover
@@ -121,29 +128,30 @@ export default function SettingsMenu() {
             </label>
           </section>
 
-          <section className="border-b border-zinc-100 px-1.5 py-1.5 dark:border-zinc-800">
-            {MENU_LINKS.map(({ labelKey, href, Icon }) => (
-              <a
-                key={labelKey}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                // Keep the click on the anchor — popover dismiss listeners must
-                // not treat this as an outside press or swallow navigation.
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 px-3 py-2 text-[13px] text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/80"
-              >
-                <span className="shrink-0 text-zinc-400 dark:text-zinc-500">
-                  <Icon size={14} />
+          <section className="border-b border-zinc-100 px-2 py-2.5 dark:border-zinc-800">
+            <p className="mb-2 text-[11px] font-medium tracking-wide text-zinc-400 dark:text-zinc-500">
+              {t("settings.transcription")}
+            </p>
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={detectSpeakers}
+                onChange={(event) => {
+                  const enabled = event.target.checked;
+                  setDetectSpeakers(enabled);
+                  saveSpeakerDetectionPreference(enabled);
+                }}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-transparent"
+              />
+              <span>
+                <span className="block text-[12px] text-zinc-700 dark:text-zinc-300">
+                  {t("settings.detectSpeakers")}
                 </span>
-                <span className="flex-1">{t(labelKey)}</span>
-                <ExternalLink
-                  size={12}
-                  className="shrink-0 text-zinc-300 dark:text-zinc-600"
-                />
-              </a>
-            ))}
+                <span className="mt-0.5 block text-[11px] leading-snug text-zinc-400 dark:text-zinc-500">
+                  {t("settings.detectSpeakersHelp")}
+                </span>
+              </span>
+            </label>
           </section>
 
           <section className="px-2 py-2.5">
@@ -166,6 +174,31 @@ export default function SettingsMenu() {
                 </span>
               </span>
             </label>
+          </section>
+
+          <section className="border-t border-zinc-100 px-1.5 py-1.5 dark:border-zinc-800">
+            {MENU_LINKS.map(({ labelKey, href, Icon }) => (
+              <a
+                key={labelKey}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                // Keep the click on the anchor — popover dismiss listeners must
+                // not treat this as an outside press or swallow navigation.
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2 text-[13px] text-zinc-700 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/80"
+              >
+                <span className="shrink-0 text-zinc-400 dark:text-zinc-500">
+                  <Icon size={14} />
+                </span>
+                <span className="flex-1">{t(labelKey)}</span>
+                <ExternalLink
+                  size={12}
+                  className="shrink-0 text-zinc-300 dark:text-zinc-600"
+                />
+              </a>
+            ))}
           </section>
 
         </PopoverContent>

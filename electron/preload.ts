@@ -1,4 +1,9 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import {
+  contextBridge,
+  ipcRenderer,
+  webUtils,
+  type IpcRendererEvent,
+} from "electron";
 
 /**
  * Minimal bridge for the renderer. Rescript's UI is still a normal web
@@ -8,6 +13,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
  */
 contextBridge.exposeInMainWorld("rescriptDesktop", {
   platform: process.platform as NodeJS.Platform,
+  nativeMediaAvailable: ipcRenderer.sendSync("media:native-available") === true,
   versions: {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
@@ -37,6 +43,29 @@ contextBridge.exposeInMainWorld("rescriptDesktop", {
       "menu:set-recents",
       projects.map(({ id, name }) => ({ id, name }))
     );
+  },
+  getFilePath: (file: File): string | null => {
+    const path = webUtils.getPathForFile(file);
+    return path || null;
+  },
+  resolveMediaPath: (path: string, expectedName: string) =>
+    ipcRenderer.invoke("media:resolve-path", path, expectedName),
+  extractAudio: (path: string) => ipcRenderer.invoke("media:extract-audio", path),
+  exportMedia: async (
+    options: unknown,
+    onProgress: (ratio: number) => void
+  ) => {
+    const jobId = crypto.randomUUID();
+    const channel = `media:export-progress:${jobId}`;
+    const listener = (_event: IpcRendererEvent, value: unknown) => {
+      if (typeof value === "number" && Number.isFinite(value)) onProgress(value);
+    };
+    ipcRenderer.on(channel, listener);
+    try {
+      return await ipcRenderer.invoke("media:export", jobId, options);
+    } finally {
+      ipcRenderer.off(channel, listener);
+    }
   },
   /** Subscribe to File-menu actions; returns an unsubscribe function. */
   onMenuCommand: (callback: (command: unknown) => void) => {

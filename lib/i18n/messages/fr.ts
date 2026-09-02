@@ -20,6 +20,10 @@ export const fr: Record<MessageKey, string> = {
   "settings.light": "Clair",
   "settings.dark": "Sombre",
   "settings.interfaceLanguage": "Langue de l’interface",
+  "settings.transcription": "Transcription",
+  "settings.detectSpeakers": "Détecter plusieurs intervenants",
+  "settings.detectSpeakersHelp":
+    "Ajoute une analyse complète de l’audio. Laissez cette option désactivée pour les vidéos à une seule voix.",
   "settings.privacy": "Confidentialité",
   "settings.helpImprove": "Aider à améliorer l’app",
   "settings.telemetryHelp": "Envoyer des statistiques anonymes d’utilisation des fonctionnalités et des rapports de plantage.",
@@ -161,7 +165,7 @@ export const fr: Record<MessageKey, string> = {
   "export.transcriptHelp": "Texte avec étiquettes de locuteur et coupes retirées. Sans horodatage.",
   "export.subtitlesHelp":
     "SRT et VTT utilisent la timeline montée (coupes appliquées). JSON conserve la liste complète des mots pour une réimportation.",
-  "export.encodingHelp": "Réencodage avec ffmpeg.wasm — les fichiers longs prennent un moment.",
+  "export.encodingHelp": "Réencodage local — les fichiers longs prennent un moment.",
   "export.reexport": "Réexporter avec les dernières modifications",
   "export.rendering": "Rendu dans votre navigateur…",
   "export.downloadFile": "Télécharger {name}",
@@ -219,6 +223,8 @@ export const fr: Record<MessageKey, string> = {
   "error.nothingToExport": "Tout a été supprimé — rien à exporter.",
   "error.videoExport": "L’export a échoué pendant le rendu de la vidéo.",
   "error.audioExport": "L’export a échoué pendant le rendu de l’audio.",
+  "error.nativeMediaUnavailable":
+    "Ce projet enregistré nécessite le moteur multimédia de l’application pour effectuer le rendu. L’export de la timeline reste disponible.",
   "error.export": "Échec de l’export.",
   "error.timelineExport": "Échec de l’export de la timeline.",
   "error.timelineEmpty": "Rien à placer sur la timeline.",
@@ -229,6 +235,8 @@ export const fr: Record<MessageKey, string> = {
   "error.jsonShape": 'JSON doit être un tableau de mots ou { "words": [...] }.',
   "error.noWords": "Aucun mot à exporter.",
   "error.projectMissing": "Ce projet n’est plus enregistré.",
+  "error.projectSourceMissing":
+    "Le fichier multimédia d’origine est nécessaire pour rouvrir ce projet.",
   "error.openProject": "Impossible d’ouvrir ce projet.",
   "error.removeProject": "Impossible de retirer ce projet.",
   "error.readTranscript": "Impossible de lire cette transcription.",

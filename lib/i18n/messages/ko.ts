@@ -20,6 +20,10 @@ export const ko: Record<MessageKey, string> = {
   "settings.light": "라이트",
   "settings.dark": "다크",
   "settings.interfaceLanguage": "인터페이스 언어",
+  "settings.transcription": "텍스트 변환",
+  "settings.detectSpeakers": "여러 화자 감지",
+  "settings.detectSpeakersHelp":
+    "전체 오디오 분석 단계가 추가됩니다. 한 명이 말하는 영상에서는 꺼 두세요.",
   "settings.privacy": "개인정보",
   "settings.helpImprove": "앱 개선에 참여",
   "settings.telemetryHelp": "익명의 기능 사용 통계와 충돌 보고서를 보냅니다.",
@@ -161,7 +165,7 @@ export const ko: Record<MessageKey, string> = {
   "export.transcriptHelp": "화자 라벨이 포함된 텍스트이며 컷한 내용은 제거됩니다. 타임스탬프는 없습니다.",
   "export.subtitlesHelp":
     "SRT와 VTT는 편집된 타임라인(컷 적용)을 사용합니다. JSON은 다시 가져오기 위해 전체 단어 목록을 유지합니다.",
-  "export.encodingHelp": "ffmpeg.wasm으로 다시 인코딩 중 — 긴 파일은 시간이 걸립니다.",
+  "export.encodingHelp": "로컬에서 다시 인코딩 중입니다. 긴 파일은 시간이 걸립니다.",
   "export.reexport": "최신 편집으로 다시 내보내기",
   "export.rendering": "브라우저에서 렌더링 중…",
   "export.downloadFile": "{name} 다운로드",
@@ -219,6 +223,8 @@ export const ko: Record<MessageKey, string> = {
   "error.nothingToExport": "모든 내용이 삭제되었습니다 — 내보낼 항목이 없습니다.",
   "error.videoExport": "동영상을 렌더링하는 중 내보내기에 실패했습니다.",
   "error.audioExport": "오디오를 렌더링하는 중 내보내기에 실패했습니다.",
+  "error.nativeMediaUnavailable":
+    "이 저장된 프로젝트를 렌더링하려면 데스크톱 미디어 엔진이 필요합니다. 타임라인 내보내기는 계속 사용할 수 있습니다.",
   "error.export": "내보내기에 실패했습니다.",
   "error.timelineExport": "타임라인 내보내기에 실패했습니다.",
   "error.timelineEmpty": "타임라인에 넣을 내용이 없습니다.",
@@ -229,6 +235,8 @@ export const ko: Record<MessageKey, string> = {
   "error.jsonShape": 'JSON은 단어 배열이거나 { "words": [...] }여야 합니다.',
   "error.noWords": "내보낼 단어가 없습니다.",
   "error.projectMissing": "해당 프로젝트는 더 이상 저장되어 있지 않습니다.",
+  "error.projectSourceMissing":
+    "이 프로젝트를 다시 열려면 원본 미디어 파일이 필요합니다.",
   "error.openProject": "해당 프로젝트를 열 수 없습니다.",
   "error.removeProject": "해당 프로젝트를 제거할 수 없습니다.",
   "error.readTranscript": "해당 자막을 읽을 수 없습니다.",

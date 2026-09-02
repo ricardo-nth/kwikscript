@@ -134,6 +134,7 @@ export default function Editor() {
   const status = useEditorStore((s) => s.status);
   const videoFile = useEditorStore((s) => s.videoFile);
   const skipTranscription = useEditorStore((s) => s.skipTranscription);
+  const skipAudioExtraction = useEditorStore((s) => s.skipAudioExtraction);
   const loadVideo = useEditorStore((s) => s.loadVideo);
   const { transcribe } = useTranscriber();
 
@@ -213,19 +214,32 @@ export default function Editor() {
   useEffect(() => {
     if (!videoFile || startedFor.current === videoFile) return;
     startedFor.current = videoFile;
+    if (skipAudioExtraction) return;
     const restoreOnly = useEditorStore.getState().skipTranscription;
     (async () => {
       const s = useEditorStore.getState();
       try {
-        s.setProgress({ message: en["progress.loadingMediaEngine"], value: null });
-        await getFFmpeg();
         s.setProgress({ message: en["progress.extractingAudio"], value: null });
-        const audio = await extractAudio(videoFile);
+        let audio: Float32Array | null;
+        const desktop = window.rescriptDesktop;
+        const mediaPath = s.mediaPath;
+        const native =
+          desktop && mediaPath
+            ? await desktop.extractAudio(mediaPath)
+            : { available: false as const };
+        if (native.available) {
+          audio = native.audio ? new Float32Array(native.audio) : null;
+        } else {
+          s.setProgress({ message: en["progress.loadingMediaEngine"], value: null });
+          await getFFmpeg();
+          s.setProgress({ message: en["progress.extractingAudio"], value: null });
+          audio = await extractAudio(videoFile);
+        }
         s.setAudio(audio);
         // ffmpeg's gigabyte is pure overhead from here until the user exports,
         // and holding it through model instantiation is what makes WebKit kill
         // the tab. Export re-initialises it lazily from the HTTP cache.
-        await releaseFFmpeg();
+        if (!native.available) await releaseFFmpeg();
         if (restoreOnly || !audio) {
           s.setStatus("ready");
           s.setProgress({ message: "", value: null });
@@ -247,7 +261,7 @@ export default function Editor() {
         );
       }
     })();
-  }, [videoFile, skipTranscription, transcribe]);
+  }, [videoFile, skipTranscription, skipAudioExtraction, transcribe]);
 
   // The desktop shell opens as a small upload window and grows once the
   // three-pane editor takes over (and shrinks back on "start over").

@@ -20,6 +20,10 @@ export const pt: Record<MessageKey, string> = {
   "settings.light": "Claro",
   "settings.dark": "Escuro",
   "settings.interfaceLanguage": "Idioma da interface",
+  "settings.transcription": "Transcrição",
+  "settings.detectSpeakers": "Detetar vários oradores",
+  "settings.detectSpeakersHelp":
+    "Adiciona uma análise completa do áudio. Deixe desativado para vídeos com apenas um orador.",
   "settings.privacy": "Privacidade",
   "settings.helpImprove": "Ajude a melhorar o app",
   "settings.telemetryHelp": "Envia estatísticas anônimas de uso de recursos e relatórios de falhas.",
@@ -161,7 +165,7 @@ export const pt: Record<MessageKey, string> = {
   "export.transcriptHelp": "Texto com rótulos de falante e cortes removidos. Sem marcas de tempo.",
   "export.subtitlesHelp":
     "SRT e VTT usam a linha do tempo editada (com cortes aplicados). JSON conserva a lista completa de palavras para reimportar.",
-  "export.encodingHelp": "Recodificando com ffmpeg.wasm — arquivos longos demoram um pouco.",
+  "export.encodingHelp": "Recodificando localmente — arquivos longos demoram um pouco.",
   "export.reexport": "Reexportar com as últimas edições",
   "export.rendering": "Renderizando no seu navegador…",
   "export.downloadFile": "Baixar {name}",
@@ -219,6 +223,8 @@ export const pt: Record<MessageKey, string> = {
   "error.nothingToExport": "Tudo foi excluído — não há nada para exportar.",
   "error.videoExport": "A exportação falhou ao renderizar o vídeo.",
   "error.audioExport": "A exportação falhou ao renderizar o áudio.",
+  "error.nativeMediaUnavailable":
+    "Este projeto guardado precisa do motor multimédia da aplicação para renderizar. A exportação da linha temporal continua disponível.",
   "error.export": "Erro ao exportar.",
   "error.timelineExport": "Erro ao exportar a linha do tempo.",
   "error.timelineEmpty": "Não há nada para colocar na linha do tempo.",
@@ -229,6 +235,8 @@ export const pt: Record<MessageKey, string> = {
   "error.jsonShape": 'JSON deve ser um array de palavras ou { "words": [...] }.',
   "error.noWords": "Não há palavras para exportar.",
   "error.projectMissing": "Esse projeto não está mais salvo.",
+  "error.projectSourceMissing":
+    "O ficheiro multimédia original é necessário para reabrir este projeto.",
   "error.openProject": "Não foi possível abrir esse projeto.",
   "error.removeProject": "Não foi possível remover esse projeto.",
   "error.readTranscript": "Não foi possível ler essa transcrição.",

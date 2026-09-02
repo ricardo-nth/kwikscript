@@ -20,6 +20,10 @@ export const de: Record<MessageKey, string> = {
   "settings.light": "Hell",
   "settings.dark": "Dunkel",
   "settings.interfaceLanguage": "Sprache der Oberfläche",
+  "settings.transcription": "Transkription",
+  "settings.detectSpeakers": "Mehrere Sprecher erkennen",
+  "settings.detectSpeakersHelp":
+    "Fügt eine vollständige Audioanalyse hinzu. Für Videos mit nur einer Person ausgeschaltet lassen.",
   "settings.privacy": "Datenschutz",
   "settings.helpImprove": "Hilf mit, die App zu verbessern",
   "settings.telemetryHelp": "Anonyme Statistiken zur Funktionsnutzung und Absturzberichte senden.",
@@ -161,7 +165,7 @@ export const de: Record<MessageKey, string> = {
   "export.transcriptHelp": "Text mit Sprecherlabels und entfernten Schnitten. Keine Zeitstempel.",
   "export.subtitlesHelp":
     "SRT und VTT verwenden die bearbeitete Timeline (Schnitte angewendet). JSON behält die vollständige Wortliste für den erneuten Import.",
-  "export.encodingHelp": "Neucodierung mit ffmpeg.wasm — längere Dateien dauern eine Weile.",
+  "export.encodingHelp": "Lokale Neucodierung — längere Dateien dauern eine Weile.",
   "export.reexport": "Mit neuesten Änderungen erneut exportieren",
   "export.rendering": "Rendering in deinem Browser…",
   "export.downloadFile": "{name} herunterladen",
@@ -219,6 +223,8 @@ export const de: Record<MessageKey, string> = {
   "error.nothingToExport": "Alles wurde gelöscht — nichts zu exportieren.",
   "error.videoExport": "Export beim Rendern des Videos fehlgeschlagen.",
   "error.audioExport": "Export beim Rendern des Audios fehlgeschlagen.",
+  "error.nativeMediaUnavailable":
+    "Dieses gespeicherte Projekt benötigt die Desktop-Medien-Engine zum Rendern. Der Timeline-Export ist weiterhin verfügbar.",
   "error.export": "Export fehlgeschlagen.",
   "error.timelineExport": "Timeline-Export fehlgeschlagen.",
   "error.timelineEmpty": "Nichts auf die Timeline zu setzen.",
@@ -229,6 +235,8 @@ export const de: Record<MessageKey, string> = {
   "error.jsonShape": 'JSON muss ein Wortarray oder { "words": [...] } sein.',
   "error.noWords": "Keine Wörter zum Exportieren.",
   "error.projectMissing": "Dieses Projekt ist nicht mehr gespeichert.",
+  "error.projectSourceMissing":
+    "Zum erneuten Öffnen dieses Projekts wird die ursprüngliche Mediendatei benötigt.",
   "error.openProject": "Dieses Projekt konnte nicht geöffnet werden.",
   "error.removeProject": "Dieses Projekt konnte nicht entfernt werden.",
   "error.readTranscript": "Dieses Transkript konnte nicht gelesen werden.",

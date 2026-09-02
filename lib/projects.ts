@@ -14,6 +14,7 @@ import {
 } from "./languages";
 import type { MediaKind } from "./media";
 import type { ManualCut, SceneBoundary, SpeakerInfo, Word } from "./types";
+import type { WaveformPeaks } from "./waveform";
 
 const DB_NAME = "rescript-projects";
 const DB_VERSION = 1;
@@ -49,16 +50,50 @@ export interface ProjectRecord extends ProjectMeta {
   sceneBoundaries?: SceneBoundary[];
   /** Named speakers (optional for older saves — derived from words when missing). */
   speakers?: SpeakerInfo[];
-  /** Original media bytes. */
-  media: Blob;
+  /**
+   * Original media bytes for the web build and older desktop projects.
+   * New desktop projects retain a path instead so a 5 GB source is not copied
+   * into IndexedDB on every machine-local project.
+   */
+  media?: Blob;
+  /** Original desktop source path. The app asks the user to locate it if moved. */
+  mediaPath?: string;
+  mediaSize?: number;
+  mediaLastModified?: number;
   /** MIME type used when reconstructing a File. */
   mediaType: string;
+  /** Persisted lightweight audio summary; avoids re-extraction on project reopen. */
+  waveform?: WaveformPeaks | null;
+  hasAudio?: boolean;
 }
 
 export type ProjectWrite = Omit<ProjectRecord, "id" | "createdAt" | "updatedAt"> & {
   id?: string;
   createdAt?: number;
 };
+
+export function projectMediaStorage({
+  media,
+  mediaPath,
+  mediaSize,
+  mediaLastModified,
+}: {
+  media: Blob;
+  mediaPath: string | null;
+  mediaSize: number;
+  mediaLastModified: number;
+}): Pick<
+  ProjectRecord,
+  "media" | "mediaPath" | "mediaSize" | "mediaLastModified"
+> {
+  return mediaPath
+    ? { mediaPath, mediaSize, mediaLastModified }
+    : {
+        media,
+        mediaSize: media.size,
+        mediaLastModified,
+      };
+}
 
 // One shared connection for the page. Opening (and closing) a fresh one per
 // call churned connections — every autosave paid an open handshake, and DevTools
@@ -189,8 +224,13 @@ export async function putProject(input: ProjectWrite): Promise<string> {
     manualCuts: input.manualCuts ?? [],
     sceneBoundaries: input.sceneBoundaries ?? [],
     speakers: input.speakers ?? [],
-    media: input.media,
+    ...(input.media ? { media: input.media } : {}),
+    mediaPath: input.mediaPath,
+    mediaSize: input.mediaSize,
+    mediaLastModified: input.mediaLastModified,
     mediaType: input.mediaType,
+    waveform: input.waveform,
+    hasAudio: input.hasAudio,
     createdAt: createdAt ?? now,
     updatedAt: now,
   };
@@ -224,6 +264,9 @@ export async function deleteProject(id: string): Promise<void> {
 
 /** Reconstruct a File from a stored project for preview/export. */
 export function fileFromProject(project: ProjectRecord): File {
+  if (!project.media) {
+    throw new Error("The original media file is needed to reopen this project.");
+  }
   return new File([project.media], project.name, {
     type: project.mediaType || project.media.type || undefined,
     lastModified: project.updatedAt,

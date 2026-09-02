@@ -7,6 +7,7 @@ import { reportError } from "@/lib/sentry";
 import { useEditorStore } from "@/lib/store";
 import { trackEvent } from "@/lib/telemetry";
 import type { WorkerResponse } from "@/lib/types";
+import { loadSpeakerDetectionPreference } from "@/lib/speakerPreferences";
 
 let activeWorker: Worker | null = null;
 
@@ -35,6 +36,7 @@ export function useTranscriber() {
     }
     const model = store.source;
     const transcriptLanguage = store.transcriptLanguage;
+    const detectSpeakers = loadSpeakerDetectionPreference();
     store.setStatus("transcribing");
     store.setProgress({ message: en["progress.loadingSpeechModel"], value: null });
 
@@ -97,7 +99,13 @@ export function useTranscriber() {
     // long recording the copy this replaces was hundreds of megabytes held for
     // the length of the run.
     workerRef.current.postMessage(
-      { audio, duration, model, language: transcriptLanguage },
+      {
+        audio,
+        duration,
+        model,
+        language: transcriptLanguage,
+        detectSpeakers,
+      },
       [audio.buffer]
     );
   }, []);

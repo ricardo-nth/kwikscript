@@ -1102,8 +1102,10 @@ function wordsFromParakeet(
 
 async function finishWithDiarization(
   words: Word[],
-  audio: Float32Array
+  audio: Float32Array,
+  detectSpeakers: boolean
 ): Promise<Word[]> {
+  if (!detectSpeakers) return words;
   try {
     post({ type: "progress", message: en["progress.speakers"], value: 0 });
     const segments = await diarize(audio);
@@ -1117,10 +1119,11 @@ async function finishWithDiarization(
 async function runParakeet(
   audio: Float32Array,
   duration: number,
-  transcriptLanguage: TranscriptLanguage
+  transcriptLanguage: TranscriptLanguage,
+  detectSpeakers: boolean
 ): Promise<Word[]> {
   // Overlap diarizer (+ language-matched aligner) with Parakeet load.
-  getDiarizer().catch(() => {});
+  if (detectSpeakers) getDiarizer().catch(() => {});
   if (alignModelFor(transcriptLanguage)) {
     getAligner(transcriptLanguage).catch(() => {});
   }
@@ -1215,18 +1218,19 @@ async function runParakeet(
     duration,
     transcriptLanguage
   );
-  return finishWithDiarization(words, audio);
+  return finishWithDiarization(words, audio, detectSpeakers);
 }
 
 async function runWhisper(
   audio: Float32Array,
   duration: number,
   choice: WhisperModel,
-  transcriptLanguage: TranscriptLanguage
+  transcriptLanguage: TranscriptLanguage,
+  detectSpeakers: boolean
 ): Promise<Word[]> {
   // Overlap Whisper + Silero downloads; diarizer and language-matched aligner
   // warm in the background so both are cached by the time the transcript lands.
-  getDiarizer().catch(() => {});
+  if (detectSpeakers) getDiarizer().catch(() => {});
   if (alignModelFor(transcriptLanguage)) {
     getAligner(transcriptLanguage).catch(() => {});
   }
@@ -1416,20 +1420,31 @@ async function runWhisper(
     transcriptLanguage
   );
 
-  return finishWithDiarization(words, audio);
+  return finishWithDiarization(words, audio, detectSpeakers);
 }
 
 self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
-  const { audio, duration, model, language } = event.data;
+  const { audio, duration, model, language, detectSpeakers = false } = event.data;
   try {
     const choice: ModelId = model ?? "base";
     const transcriptLanguage: TranscriptLanguage = language ?? "en";
 
     let words: Word[];
     if (isParakeetModel(choice)) {
-      words = await runParakeet(audio, duration, transcriptLanguage);
+      words = await runParakeet(
+        audio,
+        duration,
+        transcriptLanguage,
+        detectSpeakers
+      );
     } else if (isWhisperModel(choice)) {
-      words = await runWhisper(audio, duration, choice, transcriptLanguage);
+      words = await runWhisper(
+        audio,
+        duration,
+        choice,
+        transcriptLanguage,
+        detectSpeakers
+      );
     } else {
       throw new Error(`Unknown speech model: ${String(choice)}`);
     }

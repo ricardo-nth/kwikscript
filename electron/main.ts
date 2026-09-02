@@ -1,16 +1,28 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   protocol,
   screen,
   shell,
   net,
+  type OpenDialogOptions,
   type WebContents,
 } from "electron";
-import { join, normalize, extname } from "node:path";
+import {
+  basename,
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  normalize,
+} from "node:path";
 import { pathToFileURL } from "node:url";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { tmpdir } from "node:os";
 import { initMainSentry, setMainTelemetryEnabled } from "./sentry";
 import { initAutoUpdater } from "./updater";
 import {
@@ -28,6 +40,314 @@ import {
 const isDev = !app.isPackaged;
 const DEV_SERVER_URL = process.env.ELECTRON_START_URL ?? "http://localhost:3000";
 const isMac = process.platform === "darwin";
+
+const MEDIA_EXTENSIONS = [
+  "mp4",
+  "webm",
+  "mov",
+  "mkv",
+  "m4v",
+  "mp3",
+  "wav",
+  "m4a",
+  "aac",
+  "ogg",
+  "flac",
+  "opus",
+];
+
+/** Source paths are represented by opaque app:// URLs in the renderer. */
+const mediaPaths = new Map<string, string>();
+const exportTempDirs = new Set<string>();
+
+function readableFile(path: unknown): path is string {
+  if (typeof path !== "string" || !isAbsolute(path) || !existsSync(path)) return false;
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function mediaMime(path: string): string {
+  const ext = extname(path).toLowerCase();
+  if ([".mp4", ".m4v"].includes(ext)) return "video/mp4";
+  if (ext === ".mov") return "video/quicktime";
+  if (ext === ".webm") return "video/webm";
+  if (ext === ".mp3") return "audio/mpeg";
+  if (ext === ".wav") return "audio/wav";
+  if ([".m4a", ".aac"].includes(ext)) return "audio/mp4";
+  if (ext === ".flac") return "audio/flac";
+  if (ext === ".ogg" || ext === ".opus") return "audio/ogg";
+  return "application/octet-stream";
+}
+
+function registerMediaPath(path: string) {
+  const token = randomUUID();
+  mediaPaths.set(token, path);
+  const stat = statSync(path);
+  return {
+    path,
+    url: `app://localhost/__media/${token}/${encodeURIComponent(basename(path))}`,
+    size: stat.size,
+    lastModified: stat.mtimeMs,
+    type: mediaMime(path),
+  };
+}
+
+function nativeFfmpegPath(): string | null {
+  const candidates = [
+    process.env.RESCRIPT_FFMPEG_PATH,
+    process.platform === "darwin" ? "/opt/homebrew/bin/ffmpeg" : undefined,
+    process.platform === "darwin" ? "/usr/local/bin/ffmpeg" : undefined,
+    process.platform === "linux" ? "/usr/bin/ffmpeg" : undefined,
+  ];
+  return candidates.find((path): path is string => readableFile(path)) ?? null;
+}
+
+async function extractAudioNative(path: string): Promise<ArrayBuffer | null> {
+  const ffmpeg = nativeFfmpegPath();
+  if (!ffmpeg) throw new Error("NATIVE_FFMPEG_UNAVAILABLE");
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      ffmpeg,
+      [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        path,
+        "-map",
+        "0:a:0?",
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-f",
+        "f32le",
+        "pipe:1",
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] }
+    );
+    const chunks: Buffer[] = [];
+    const errors: Buffer[] = [];
+    let errorBytes = 0;
+    child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => {
+      if (errorBytes >= 64 * 1024) return;
+      errors.push(chunk);
+      errorBytes += chunk.byteLength;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      const output = Buffer.concat(chunks);
+      if (code !== 0 && output.byteLength === 0) {
+        const message = Buffer.concat(errors).toString("utf8");
+        if (/does not contain any stream|matches no streams/i.test(message)) {
+          resolve(null);
+          return;
+        }
+        reject(new Error(message.trim() || "Native audio extraction failed."));
+        return;
+      }
+      const copy = Uint8Array.from(output);
+      resolve(copy.buffer);
+    });
+  });
+}
+
+type NativeExportOptions = {
+  sourcePath: string;
+  kind: "video" | "audio";
+  format: "mp4" | "webm" | "m4a" | "mp3" | "wav";
+  resolution?: "original" | "720" | "1080" | "2160";
+  withAudio?: boolean;
+  keepRanges: Array<{ start: number; end: number }>;
+  editedDuration: number;
+};
+
+function validExportOptions(value: unknown): value is NativeExportOptions {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Partial<NativeExportOptions>;
+  const validFormat =
+    (v.kind === "video" && (v.format === "mp4" || v.format === "webm")) ||
+    (v.kind === "audio" &&
+      (v.format === "m4a" || v.format === "mp3" || v.format === "wav"));
+  const validResolution =
+    v.resolution === undefined ||
+    v.resolution === "original" ||
+    v.resolution === "720" ||
+    v.resolution === "1080" ||
+    v.resolution === "2160";
+  return (
+    readableFile(v.sourcePath) &&
+    (v.kind === "video" || v.kind === "audio") &&
+    validFormat &&
+    validResolution &&
+    (v.withAudio === undefined || typeof v.withAudio === "boolean") &&
+    Array.isArray(v.keepRanges) &&
+    v.keepRanges.length > 0 &&
+    v.keepRanges.every(
+      (range) =>
+        Number.isFinite(range?.start) &&
+        Number.isFinite(range?.end) &&
+        range.start >= 0 &&
+        range.end > range.start
+    ) &&
+    Number.isFinite(v.editedDuration) &&
+    (v.editedDuration ?? 0) > 0
+  );
+}
+
+function nativeExportArgs(options: NativeExportOptions, output: string): string[] {
+  const parts: string[] = [];
+  const labels: string[] = [];
+  const withAudio = options.withAudio !== false;
+  for (let i = 0; i < options.keepRanges.length; i++) {
+    const range = options.keepRanges[i];
+    const start = range.start.toFixed(3);
+    const end = range.end.toFixed(3);
+    if (options.kind === "video") {
+      parts.push(`[0:v]trim=start=${start}:end=${end},setpts=PTS-STARTPTS[v${i}]`);
+      labels.push(`[v${i}]`);
+      if (withAudio) {
+        parts.push(`[0:a]atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS[a${i}]`);
+        labels[i] += `[a${i}]`;
+      }
+    } else {
+      parts.push(`[0:a]atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS[a${i}]`);
+      labels.push(`[a${i}]`);
+    }
+  }
+
+  if (options.kind === "audio") {
+    const filter =
+      parts.join(";") +
+      `;${labels.join("")}concat=n=${options.keepRanges.length}:v=0:a=1[outa]`;
+    const codec =
+      options.format === "mp3"
+        ? ["-c:a", "libmp3lame", "-b:a", "192k"]
+        : options.format === "wav"
+          ? ["-c:a", "pcm_s16le"]
+          : ["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"];
+    return [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      options.sourcePath,
+      "-filter_complex",
+      filter,
+      "-map",
+      "[outa]",
+      ...codec,
+      "-progress",
+      "pipe:2",
+      "-nostats",
+      "-y",
+      output,
+    ];
+  }
+
+  let filter =
+    parts.join(";") +
+    `;${labels.join("")}concat=n=${options.keepRanges.length}:v=1:a=${
+      withAudio ? 1 : 0
+    }[outv]${withAudio ? "[outa]" : ""}`;
+  let videoMap = "[outv]";
+  if (options.resolution && options.resolution !== "original") {
+    const height = Number(options.resolution);
+    filter += `;[outv]scale=-2:'min(ih,${height})',scale=trunc(iw/2)*2:trunc(ih/2)*2[vout]`;
+    videoMap = "[vout]";
+  }
+  const codec =
+    options.format === "webm"
+      ? [
+          "-c:v",
+          "libvpx-vp9",
+          "-crf",
+          "35",
+          "-b:v",
+          "0",
+          "-row-mt",
+          "1",
+          "-cpu-used",
+          "8",
+          ...(withAudio ? ["-c:a", "libopus", "-b:a", "128k"] : []),
+        ]
+      : [
+          "-c:v",
+          "libx264",
+          "-preset",
+          "ultrafast",
+          "-crf",
+          "22",
+          ...(withAudio ? ["-c:a", "aac", "-b:a", "192k"] : []),
+          "-movflags",
+          "+faststart",
+        ];
+  return [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-i",
+    options.sourcePath,
+    "-filter_complex",
+    filter,
+    "-map",
+    videoMap,
+    ...(withAudio ? ["-map", "[outa]"] : ["-an"]),
+    ...codec,
+    "-progress",
+    "pipe:2",
+    "-nostats",
+    "-y",
+    output,
+  ];
+}
+
+async function exportMediaNative(
+  options: NativeExportOptions,
+  onProgress: (ratio: number) => void
+): Promise<string> {
+  const ffmpeg = nativeFfmpegPath();
+  if (!ffmpeg) throw new Error("NATIVE_FFMPEG_UNAVAILABLE");
+  const dir = mkdtempSync(join(tmpdir(), "rescript-export-"));
+  exportTempDirs.add(dir);
+  const output = join(dir, `edited.${options.format}`);
+  return new Promise((resolve, reject) => {
+    const child = spawn(ffmpeg, nativeExportArgs(options, output), {
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let stderr = "";
+    let pending = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      const text = chunk.toString("utf8");
+      if (stderr.length < 64 * 1024) stderr += text;
+      pending += text;
+      const lines = pending.split(/\r?\n/);
+      pending = lines.pop() ?? "";
+      for (const line of lines) {
+        const match = /^(?:out_time_us|out_time_ms)=(\d+)$/.exec(line);
+        if (!match) continue;
+        const seconds = Number(match[1]) / 1e6;
+        onProgress(
+          Math.min(1, Math.max(0, seconds / Math.max(0.001, options.editedDuration)))
+        );
+      }
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0 || !readableFile(output)) {
+        reject(new Error(stderr.trim() || "Native media export failed."));
+        return;
+      }
+      onProgress(1);
+      resolve(output);
+    });
+  });
+}
 
 type WindowMode = "compact" | "expanded";
 
@@ -117,6 +437,34 @@ function resolveStaticPath(urlPath: string): string | null {
 function registerAppProtocol(): void {
   protocol.handle("app", async (request) => {
     const { pathname } = new URL(request.url);
+    if (pathname.startsWith("/__media/")) {
+      const token = pathname.split("/")[2];
+      const mediaPath = token ? mediaPaths.get(token) : undefined;
+      if (!mediaPath || !readableFile(mediaPath)) {
+        return new Response("Media not found", {
+          status: 404,
+          statusText: "Not Found",
+        });
+      }
+      const headers = new Headers();
+      const range = request.headers.get("range");
+      if (range) headers.set("Range", range);
+      const response = await net.fetch(pathToFileURL(mediaPath).toString(), {
+        headers,
+      });
+      const responseHeaders = new Headers(response.headers);
+      responseHeaders.set("Content-Type", mediaMime(mediaPath));
+      // Development runs the renderer on http://localhost while packaged media
+      // is same-origin app://. The opaque token is the access boundary, so allow
+      // the renderer origin to consume the stream in both modes.
+      responseHeaders.set("Cross-Origin-Resource-Policy", "cross-origin");
+      responseHeaders.set("Access-Control-Allow-Origin", "*");
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders,
+      });
+    }
     const filePath = resolveStaticPath(pathname);
     if (!filePath) {
       return new Response("Not found", { status: 404, statusText: "Not Found" });
@@ -357,6 +705,60 @@ if (!gotLock) {
     }
     setRecentProjects(recents);
   });
+  ipcMain.on("media:native-available", (event) => {
+    event.returnValue = nativeFfmpegPath() !== null;
+  });
+  ipcMain.handle(
+    "media:resolve-path",
+    async (event, value: unknown, expectedName: unknown) => {
+      let path = readableFile(value) ? value : null;
+      if (!path) {
+        const win = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+        const expected =
+          typeof expectedName === "string" && expectedName.trim()
+            ? expectedName.trim()
+            : "source media";
+        const options: OpenDialogOptions = {
+          title: `Locate ${expected}`,
+          defaultPath:
+            typeof value === "string" && isAbsolute(value)
+              ? dirname(value)
+              : undefined,
+          properties: ["openFile"],
+          filters: [
+            { name: "Video and audio", extensions: MEDIA_EXTENSIONS },
+            { name: "All files", extensions: ["*"] },
+          ],
+        };
+        const result = win
+          ? await dialog.showOpenDialog(win, options)
+          : await dialog.showOpenDialog(options);
+        const selected = result.canceled ? undefined : result.filePaths[0];
+        path = readableFile(selected) ? selected : null;
+      }
+      return path ? registerMediaPath(path) : null;
+    }
+  );
+  ipcMain.handle("media:extract-audio", async (_event, value: unknown) => {
+    if (!readableFile(value)) throw new Error("The source media file is missing.");
+    if (!nativeFfmpegPath()) return { available: false };
+    const audio = await extractAudioNative(value);
+    return { available: true, audio };
+  });
+  ipcMain.handle(
+    "media:export",
+    async (event, jobId: unknown, value: unknown) => {
+      if (!nativeFfmpegPath()) return { available: false };
+      if (typeof jobId !== "string" || !validExportOptions(value)) {
+        throw new Error("Invalid media export request.");
+      }
+      const channel = `media:export-progress:${jobId}`;
+      const output = await exportMediaNative(value, (ratio) => {
+        if (!event.sender.isDestroyed()) event.sender.send(channel, ratio);
+      });
+      return { available: true, url: registerMediaPath(output).url };
+    }
+  );
   // The renderer announces itself once it is listening for menu commands; until
   // then anything the menu fired at a just-opened window is held.
   ipcMain.on("menu:renderer-ready", (event) => {
@@ -366,11 +768,21 @@ if (!gotLock) {
 
   app.on("before-quit", () => {
     quitting = true;
+    for (const dir of exportTempDirs) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // The OS temp cleaner will recover anything still in use.
+      }
+    }
+    exportTempDirs.clear();
   });
 
   app.whenReady().then(() => {
     setDesktopLocale(resolveDesktopLocale(app.getLocale()));
-    if (!isDev) registerAppProtocol();
+    // Packaged builds serve the whole renderer here; development still needs
+    // the same handler for path-backed media reopened from saved projects.
+    registerAppProtocol();
     buildAppMenu(dispatchMenuCommand);
     createWindow();
     initAutoUpdater();

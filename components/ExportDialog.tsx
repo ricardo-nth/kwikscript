@@ -74,6 +74,7 @@ export default function ExportDialog() {
   const open = useEditorStore((s) => s.exportOpen);
   const setOpen = useEditorStore((s) => s.setExportOpen);
   const videoFile = useEditorStore((s) => s.videoFile);
+  const mediaPath = useEditorStore((s) => s.mediaPath);
   const mediaKind = useEditorStore((s) => s.mediaKind);
   const duration = useEditorStore((s) => s.duration);
   const words = useEditorStore((s) => s.words);
@@ -205,19 +206,42 @@ export default function ExportDialog() {
     setStatus("exporting");
     try {
       const keeps = getKeepRanges(cuts, duration);
-      const blob =
-        activeTab === "audio"
-          ? await exportAudio(videoFile, keeps, editedDuration, setProgress, {
-              format: audioFormat,
-            })
-          : await exportVideo(videoFile, keeps, editedDuration, setProgress, {
-              withAudio: hasAudioTrack,
-              format: videoFormat,
-              resolution,
-            });
       const prev = useEditorStore.getState().exportUrl;
       if (prev) URL.revokeObjectURL(prev);
-      setExportUrl(URL.createObjectURL(blob));
+      const desktop = window.rescriptDesktop;
+      const native =
+        desktop && mediaPath
+          ? await desktop.exportMedia(
+              {
+                sourcePath: mediaPath,
+                kind: activeTab === "audio" ? "audio" : "video",
+                format: activeTab === "audio" ? audioFormat : videoFormat,
+                resolution,
+                withAudio: hasAudioTrack,
+                keepRanges: keeps,
+                editedDuration,
+              },
+              setProgress
+            )
+          : { available: false as const };
+      if (native.available && native.url) {
+        setExportUrl(native.url);
+      } else {
+        if (videoFile.size === 0) {
+          throw new Error(en["error.nativeMediaUnavailable"]);
+        }
+        const blob =
+          activeTab === "audio"
+            ? await exportAudio(videoFile, keeps, editedDuration, setProgress, {
+                format: audioFormat,
+              })
+            : await exportVideo(videoFile, keeps, editedDuration, setProgress, {
+                withAudio: hasAudioTrack,
+                format: videoFormat,
+                resolution,
+              });
+        setExportUrl(URL.createObjectURL(blob));
+      }
       trackEvent("export_completed", {
         kind: activeTab,
         format: activeTab === "audio" ? audioFormat : videoFormat,
@@ -230,6 +254,7 @@ export default function ExportDialog() {
     }
   }, [
     videoFile,
+    mediaPath,
     activeTab,
     isAudioProject,
     hasAudioTrack,

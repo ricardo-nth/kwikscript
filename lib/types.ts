@@ -106,4 +106,6 @@ export interface WorkerRequest {
    * and is passed through for Parakeet alignment (Parakeet ASR still auto-detects).
    */
   language: import("./languages").TranscriptLanguage;
+  /** Run the full-recording speaker model. Off by default for talking-head work. */
+  detectSpeakers?: boolean;
 }

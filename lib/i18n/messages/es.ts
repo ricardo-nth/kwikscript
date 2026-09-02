@@ -20,6 +20,10 @@ export const es: Record<MessageKey, string> = {
   "settings.light": "Claro",
   "settings.dark": "Oscuro",
   "settings.interfaceLanguage": "Idioma de la interfaz",
+  "settings.transcription": "Transcripción",
+  "settings.detectSpeakers": "Detectar varios hablantes",
+  "settings.detectSpeakersHelp":
+    "Añade un análisis completo del audio. Déjalo desactivado para vídeos con un solo hablante.",
   "settings.privacy": "Privacidad",
   "settings.helpImprove": "Ayuda a mejorar la app",
   "settings.telemetryHelp": "Envía estadísticas anónimas de uso de funciones e informes de fallos.",
@@ -161,7 +165,7 @@ export const es: Record<MessageKey, string> = {
   "export.transcriptHelp": "Texto con etiquetas de hablante y cortes eliminados. Sin marcas de tiempo.",
   "export.subtitlesHelp":
     "SRT y VTT usan la línea de tiempo editada (con cortes aplicados). JSON conserva la lista completa de palabras para reimportar.",
-  "export.encodingHelp": "Recodificando con ffmpeg.wasm — los archivos largos tardan un poco.",
+  "export.encodingHelp": "Recodificando localmente; los archivos largos tardan un poco.",
   "export.reexport": "Reexportar con las últimas ediciones",
   "export.rendering": "Renderizando en tu navegador…",
   "export.downloadFile": "Descargar {name}",
@@ -219,6 +223,8 @@ export const es: Record<MessageKey, string> = {
   "error.nothingToExport": "Todo se ha eliminado — no hay nada que exportar.",
   "error.videoExport": "La exportación falló al renderizar el video.",
   "error.audioExport": "La exportación falló al renderizar el audio.",
+  "error.nativeMediaUnavailable":
+    "Este proyecto guardado necesita el motor multimedia de escritorio para renderizar. La exportación de la línea de tiempo sigue disponible.",
   "error.export": "Error al exportar.",
   "error.timelineExport": "Error al exportar la línea de tiempo.",
   "error.timelineEmpty": "No hay nada que poner en la línea de tiempo.",
@@ -229,6 +235,8 @@ export const es: Record<MessageKey, string> = {
   "error.jsonShape": 'JSON debe ser un array de palabras o { "words": [...] }.',
   "error.noWords": "No hay palabras para exportar.",
   "error.projectMissing": "Ese proyecto ya no está guardado.",
+  "error.projectSourceMissing":
+    "Se necesita el archivo multimedia original para volver a abrir este proyecto.",
   "error.openProject": "No se pudo abrir ese proyecto.",
   "error.removeProject": "No se pudo quitar ese proyecto.",
   "error.readTranscript": "No se pudo leer esa transcripción.",

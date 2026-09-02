@@ -3,7 +3,7 @@
  */
 
 import { useEditorStore } from "./store";
-import { putProject } from "./projects";
+import { projectMediaStorage, putProject } from "./projects";
 
 const DEBOUNCE_MS = 500;
 
@@ -72,8 +72,17 @@ async function writeSnapshot() {
       manualCuts: s.manualCuts,
       sceneBoundaries: s.sceneBoundaries,
       speakers: s.speakers,
-      media: s.videoFile,
+      // Desktop projects refer to the user-selected source path. The web build
+      // has no durable path access, so it keeps the historical Blob fallback.
+      ...projectMediaStorage({
+        media: s.videoFile,
+        mediaPath: s.mediaPath,
+        mediaSize: s.sourceMediaSize,
+        mediaLastModified: s.sourceMediaLastModified,
+      }),
       mediaType: s.videoFile.type,
+      waveform: s.waveform,
+      hasAudio: s.hasAudio,
     });
     if (useEditorStore.getState().projectId !== id) {
       useEditorStore.setState({ projectId: id });

@@ -66,6 +66,10 @@ interface EditorState {
   // Media
   videoFile: File | null;
   mediaUrl: string | null;
+  /** Desktop source path; null on the web and for legacy Blob-backed projects. */
+  mediaPath: string | null;
+  sourceMediaSize: number;
+  sourceMediaLastModified: number;
   /** Whether the loaded file is video or audio-only. */
   mediaKind: MediaKind | null;
   duration: number;
@@ -95,6 +99,8 @@ interface EditorState {
    * (restored projects / imported transcripts already have words).
    */
   skipTranscription: boolean;
+  /** Restored projects persist their waveform and do not need another decode. */
+  skipAudioExtraction: boolean;
 
   // Pipeline status
   status: EditorStatus;
@@ -348,6 +354,9 @@ function pushEdit(
 export const useEditorStore = create<EditorState>((set, get) => ({
   videoFile: null,
   mediaUrl: null,
+  mediaPath: null,
+  sourceMediaSize: 0,
+  sourceMediaLastModified: 0,
   mediaKind: null,
   duration: 0,
   waveform: null,
@@ -357,6 +366,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   pendingTranscript: null,
   projectId: null,
   skipTranscription: false,
+  skipAudioExtraction: false,
 
   status: "idle",
   progress: { message: "", value: null },
@@ -393,15 +403,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const prev = get().mediaUrl;
     if (prev) URL.revokeObjectURL(prev);
     const current = get().source;
+    const mediaPath = window.rescriptDesktop?.nativeMediaAvailable
+      ? window.rescriptDesktop.getFilePath(file)
+      : null;
     const speakers = imported
       ? speakersFromWords(imported, options?.speakers ?? [])
       : [];
     set({
       videoFile: file,
       mediaUrl: URL.createObjectURL(file),
+      mediaPath,
+      sourceMediaSize: file.size,
+      sourceMediaLastModified: file.lastModified,
       mediaKind: kind,
       projectId: null,
       skipTranscription: Boolean(imported),
+      skipAudioExtraction: false,
       source: imported ? "import" : isModelId(current) ? current : "base",
       pendingTranscript: null,
       status: "preparing",
@@ -443,7 +460,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   openProject: async (id) => {
     const record = await getProject(id);
     if (!record) throw new Error(en["error.projectMissing"]);
-    const file = fileFromProject(record);
+    let file: File;
+    let mediaUrl: string;
+    let mediaPath: string | null = null;
+    let sourceMediaSize = record.mediaSize ?? record.media?.size ?? 0;
+    let sourceMediaLastModified = record.mediaLastModified ?? record.updatedAt;
+    if (record.mediaPath && window.rescriptDesktop) {
+      const resolved = await window.rescriptDesktop.resolveMediaPath(
+        record.mediaPath,
+        record.name
+      );
+      if (!resolved) {
+        throw new Error(en["error.projectSourceMissing"]);
+      }
+      mediaPath = resolved.path;
+      sourceMediaSize = resolved.size;
+      sourceMediaLastModified = resolved.lastModified;
+      file = new File([], record.name, {
+        type: record.mediaType || resolved.type,
+        lastModified: resolved.lastModified,
+      });
+      mediaUrl = resolved.url;
+    } else {
+      file = fileFromProject(record);
+      mediaUrl = URL.createObjectURL(file);
+    }
     const prev = get().mediaUrl;
     if (prev) URL.revokeObjectURL(prev);
     const manualCuts = record.manualCuts ?? [];
@@ -451,7 +492,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const speakers = speakersFromWords(record.words, record.speakers ?? []);
     set({
       videoFile: file,
-      mediaUrl: URL.createObjectURL(file),
+      mediaUrl,
+      mediaPath,
+      sourceMediaSize,
+      sourceMediaLastModified,
       mediaKind: record.mediaKind,
       duration: record.duration,
       source: isTranscriptSource(record.source) ? record.source : "base",
@@ -460,9 +504,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         : DEFAULT_TRANSCRIPT_LANGUAGE,
       projectId: record.id,
       skipTranscription: true,
+      skipAudioExtraction:
+        record.waveform !== undefined || record.hasAudio === false,
       pendingTranscript: null,
-      status: "preparing",
-      progress: { message: en["progress.loadingMediaEngine"], value: null },
+      status:
+        record.waveform !== undefined || record.hasAudio === false
+          ? "ready"
+          : "preparing",
+      progress: { message: "", value: null },
       words: record.words,
       silencePreviewRanges: [],
       speakers,
@@ -482,8 +531,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       playing: false,
       exportUrl: null,
       exportOpen: false,
-      waveform: null,
-      hasAudio: false,
+      waveform: record.waveform ?? null,
+      hasAudio: record.hasAudio ?? false,
     });
   },
 
@@ -1043,6 +1092,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({
       videoFile: null,
       mediaUrl: null,
+      mediaPath: null,
+      sourceMediaSize: 0,
+      sourceMediaLastModified: 0,
       mediaKind: null,
       duration: 0,
       waveform: null,
@@ -1052,6 +1104,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       pendingTranscript: null,
       projectId: null,
       skipTranscription: false,
+      skipAudioExtraction: false,
       status: "idle",
       progress: { message: "", value: null },
       partialText: "",
