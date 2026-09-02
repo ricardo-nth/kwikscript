@@ -58,7 +58,9 @@ export function findSilenceRanges(
   duration: number,
   manualCuts: ManualCut[] = [],
   minDuration = MIN_SILENCE_DURATION,
-  pad = SILENCE_PAD
+  leftPad = SILENCE_PAD,
+  rightPad = leftPad,
+  maxDuration = Number.POSITIVE_INFINITY
 ): TimeRange[] {
   if (duration <= 0) return [];
 
@@ -96,17 +98,27 @@ export function findSilenceRanges(
 
   const out: TimeRange[] = [];
   for (const gap of gaps) {
-    if (gap.end - gap.start < minDuration - 1e-4) continue;
+    const gapDuration = gap.end - gap.start;
+    if (
+      gapDuration < minDuration - 1e-4 ||
+      gapDuration > maxDuration + 1e-4
+    ) {
+      continue;
+    }
     for (const part of subtractCuts(
       { start: gap.start, end: gap.end },
       cuts
     )) {
       if (part.end - part.start < minDuration - 1e-4) continue;
       // Only pad edges that still sit against speech (not against a prior cut).
-      const padStart = gap.padStart && Math.abs(part.start - gap.start) < 1e-4;
-      const padEnd = gap.padEnd && Math.abs(part.end - gap.end) < 1e-4;
-      const start = part.start + (padStart ? pad : 0);
-      const end = part.end - (padEnd ? pad : 0);
+      const touchesSpeechOnLeft =
+        gap.padStart && Math.abs(part.start - gap.start) < 1e-4;
+      const touchesSpeechOnRight =
+        gap.padEnd && Math.abs(part.end - gap.end) < 1e-4;
+      const start =
+        part.start + (touchesSpeechOnLeft ? Math.max(0, leftPad) : 0);
+      const end =
+        part.end - (touchesSpeechOnRight ? Math.max(0, rightPad) : 0);
       if (end - start > 1e-4) out.push({ start, end });
     }
   }

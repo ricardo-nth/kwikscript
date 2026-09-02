@@ -67,6 +67,36 @@ function assert(cond: boolean, msg: string): void {
 }
 
 {
+  // An optional maximum protects deliberate long pauses while shorter gaps cut.
+  const words = [w(1, 0, 1), w(2, 1.5, 2), w(3, 5, 6)];
+  const ranges = findSilenceRanges(words, 6, [], 0.3, 0.05, 0.05, 2);
+  assert(ranges.length === 1, `expected only the short pause, got ${ranges.length}`);
+  assert(
+    nearly(ranges[0]!.start, 1 + SILENCE_PAD) &&
+      nearly(ranges[0]!.end, 1.5 - SILENCE_PAD),
+    "long pause protected"
+  );
+  console.log("long pause protection: ok");
+}
+
+{
+  // Left and right padding can be tuned independently (or both set to zero).
+  const words = [w(1, 0, 1), w(2, 2, 3)];
+  const asymmetric = findSilenceRanges(words, 3, [], 0.13, 0.1, 0.2);
+  assert(asymmetric.length === 1, "asymmetric pause detected");
+  assert(
+    nearly(asymmetric[0]!.start, 1.1) && nearly(asymmetric[0]!.end, 1.8),
+    "asymmetric padding"
+  );
+  const punchy = findSilenceRanges(words, 3, [], 0.13, 0, 0);
+  assert(
+    nearly(punchy[0]!.start, 1) && nearly(punchy[0]!.end, 2),
+    "zero padding cuts the whole pause"
+  );
+  console.log("independent padding: ok");
+}
+
+{
   // Deleted words already cut their span; silence around them is still found,
   // and the already-cut middle is not re-reported.
   const words = [w(1, 0.5, 1.0), w(2, 1.5, 2.0, true), w(3, 3.0, 3.5)];

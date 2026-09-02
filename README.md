@@ -33,7 +33,7 @@ builds auto-update from GitHub Releases. Prefer the browser? Use the
 - 📥 **Import your own transcript** — skip Whisper and edit with an SRT, VTT, or JSON caption file
 - 📤 **Export hub** — video (MP4/WebM, 720p–4K), audio (M4A/MP3/WAV), transcript (TXT/MD), subtitles (SRT/VTT/JSON), or NLE timeline (Resolve/Premiere/FCP/AAF)
 - 🧹 **Filler removal** — one-click cut of "um", "uh", and similar fillers
-- 🔇 **Silence removal** — one-click cut of pauses and dead air (≥0.3s)
+- 🔇 **Silence removal** — configurable pause length and independent left/right padding, with a punchy preset
 - 🗣️ **Speaker diarization** — the transcript is grouped by speaker
 - 🎬 **Timeline** — waveform, wordbar with draggable timing handles, Split,
   cut regions, playhead; scroll to zoom, side-scroll to pan
@@ -85,7 +85,7 @@ For desktop packaging, signing, and cutting releases, see
 3. **Edit** — deleting words produces "cut ranges" of the original media. The
    preview player skips them in real time and the timeline shows them in red.
    **Remove fillers** cuts every detected "um" / "uh" / etc. in one click.
-   **Remove silences** cuts pauses and dead air of 0.3s or longer.
+   **Silence cleanup** lets you choose the minimum pause length and how much padding to keep before and after speech. The **Punchy** preset uses a 0.13s minimum with zero padding; **Default** preserves the original 0.3s / 0.05s behaviour.
 4. **Export** — the kept ranges are trimmed and concatenated with an ffmpeg
    filter graph and re-encoded (`libx264`/`aac`), so cuts are word-accurate.
 
