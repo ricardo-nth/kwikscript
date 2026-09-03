@@ -25,10 +25,14 @@ export default function MediaPreview() {
   const cuts = useCutRanges();
 
   const mediaRef = useRef<HTMLMediaElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
+  const audioPreviewActiveRef = useRef(false);
   const resumeTimeRef = useRef(0);
   const isAudio = mediaKind === "audio";
   const cutsRef = useRef(cuts);
   const [playbackUrl, setPlaybackUrl] = useState(mediaUrl);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
   const [fallbackNeeded, setFallbackNeeded] = useState(false);
   const [previewState, setPreviewState] = useState<"idle" | "preparing" | "error">("idle");
   const [previewProgress, setPreviewProgress] = useState(0);
@@ -42,7 +46,16 @@ export default function MediaPreview() {
     let stale = false;
     void Promise.resolve().then(() => {
       if (stale) return;
+      audioPreviewActiveRef.current = false;
+      audioPreviewRef.current?.pause();
+      if (!isAudio) {
+        const video = videoRef.current;
+        if (video) video.muted = false;
+        mediaRef.current = video;
+        setVideoEl(video);
+      }
       setPlaybackUrl(mediaUrl);
+      setAudioPreviewUrl(null);
       setFallbackNeeded(false);
       setPreviewState("idle");
       setPreviewProgress(0);
@@ -50,7 +63,30 @@ export default function MediaPreview() {
     return () => {
       stale = true;
     };
-  }, [mediaUrl]);
+  }, [isAudio, mediaUrl, setVideoEl]);
+
+  // Long-GOP video (especially HEVC) can block audio for a noticeable fraction
+  // of a second whenever currentTime jumps over a cut. A tiny AAC copy becomes
+  // the audible timing master; the original video stays muted and follows it.
+  useEffect(() => {
+    const desktop = window.rescriptDesktop;
+    if (isAudio || status !== "ready" || !desktop || !mediaPath) return;
+
+    let stale = false;
+    void desktop
+      .prepareAudioPreview(mediaPath)
+      .then((result) => {
+        if (!stale && result.available && result.url) {
+          setAudioPreviewUrl(result.url);
+        }
+      })
+      .catch(() => {
+        // The source video remains a fully functional playback fallback.
+      });
+    return () => {
+      stale = true;
+    };
+  }, [isAudio, mediaPath, status]);
 
   useEffect(() => {
     const desktop = window.rescriptDesktop;
@@ -102,6 +138,54 @@ export default function MediaPreview() {
     [setVideoEl]
   );
 
+  const videoRefCb = useCallback(
+    (el: HTMLVideoElement | null) => {
+      videoRef.current = el;
+      if (!audioPreviewActiveRef.current) {
+        mediaRef.current = el;
+        setVideoEl(el);
+      }
+    },
+    [setVideoEl],
+  );
+
+  const audioPreviewRefCb = useCallback((el: HTMLAudioElement | null) => {
+    audioPreviewRef.current = el;
+  }, []);
+
+  const activateAudioPreview = useCallback(
+    (audio: HTMLAudioElement) => {
+      if (audioPreviewActiveRef.current && mediaRef.current === audio) return;
+      const video = videoRef.current;
+      if (!video) return;
+      audio.currentTime = Math.min(
+        video.currentTime,
+        Math.max(0, audio.duration - 0.05),
+      );
+      video.muted = true;
+      audioPreviewActiveRef.current = true;
+      mediaRef.current = audio;
+      setVideoEl(audio);
+      if (!video.paused) void audio.play();
+    },
+    [setVideoEl],
+  );
+
+  const disableAudioPreview = useCallback(() => {
+    const video = videoRef.current;
+    const audio = audioPreviewRef.current;
+    const wasPlaying = useEditorStore.getState().playing;
+    audioPreviewActiveRef.current = false;
+    if (audio) audio.pause();
+    mediaRef.current = video;
+    if (video) {
+      video.muted = false;
+      setVideoEl(video);
+      if (wasPlaying) void video.play();
+    }
+    setAudioPreviewUrl(null);
+  }, [setVideoEl]);
+
   // Playback loop: mirror time into the store and skip over cut ranges.
   useEffect(() => {
     let raf = 0;
@@ -119,6 +203,10 @@ export default function MediaPreview() {
               t = cut.start;
             } else {
               media.currentTime = target;
+              const video = videoRef.current;
+              if (audioPreviewActiveRef.current && video) {
+                video.currentTime = target;
+              }
               t = target;
             }
           }
@@ -156,7 +244,7 @@ export default function MediaPreview() {
     <div className="flex min-h-0 flex-1 flex-col bg-zinc-50/70 p-3 sm:p-4 dark:bg-zinc-950/70">
       <div className="relative flex min-h-0 flex-1 items-center justify-center">
         <video
-          ref={refCb}
+          ref={videoRefCb}
           src={playbackUrl ?? undefined}
           playsInline
           onClick={togglePlay}
@@ -180,10 +268,52 @@ export default function MediaPreview() {
           onError={() => {
             if (playbackUrl === mediaUrl) setFallbackNeeded(true);
           }}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
+          onPlay={() => {
+            if (!audioPreviewActiveRef.current) setPlaying(true);
+          }}
+          onPause={() => {
+            if (!audioPreviewActiveRef.current) setPlaying(false);
+          }}
           className="max-h-full max-w-full cursor-pointer rounded-sm bg-black shadow-lg shadow-zinc-900/10 dark:shadow-black/40"
         />
+        {audioPreviewUrl && (
+          <audio
+            ref={audioPreviewRefCb}
+            src={audioPreviewUrl}
+            preload="auto"
+            onCanPlay={(event) => activateAudioPreview(event.currentTarget)}
+            onPlay={(event) => {
+              if (!audioPreviewActiveRef.current) return;
+              const video = videoRef.current;
+              if (video) {
+                if (
+                  Math.abs(video.currentTime - event.currentTarget.currentTime) >
+                  0.08
+                ) {
+                  video.currentTime = event.currentTarget.currentTime;
+                }
+                if (video.paused) void video.play();
+              }
+              setPlaying(true);
+            }}
+            onSeeking={(event) => {
+              if (!audioPreviewActiveRef.current) return;
+              const video = videoRef.current;
+              if (video) video.currentTime = event.currentTarget.currentTime;
+            }}
+            onPause={(event) => {
+              if (!audioPreviewActiveRef.current) return;
+              const video = videoRef.current;
+              if (video) {
+                video.pause();
+                video.currentTime = event.currentTarget.currentTime;
+              }
+              setPlaying(false);
+            }}
+            onError={disableAudioPreview}
+            className="hidden"
+          />
+        )}
         {previewState === "preparing" && (
           <div
             role="status"

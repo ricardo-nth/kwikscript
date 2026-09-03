@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld("rescriptDesktop", {
   resolveMediaPath: (path: string, expectedName: string) =>
     ipcRenderer.invoke("media:resolve-path", path, expectedName),
   extractAudio: (path: string) => ipcRenderer.invoke("media:extract-audio", path),
+  prepareAudioPreview: (path: string) =>
+    ipcRenderer.invoke("media:prepare-audio-preview", path),
   transcribeCoreML: async (
     path: string,
     onProgress: (progress: { stage: string; fraction: number }) => void

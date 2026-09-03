@@ -83,6 +83,10 @@ export interface RescriptDesktop {
   ) => Promise<ResolvedDesktopMedia | null>;
   /** Extract mono 16 kHz PCM with native FFmpeg when the desktop host provides it. */
   extractAudio: (path: string) => Promise<DesktopAudioExtraction>;
+  /** Build a small seek-friendly audio track for smooth cut-preview playback. */
+  prepareAudioPreview: (
+    path: string
+  ) => Promise<{ available: boolean; url?: string }>;
   /** Transcribe with the bundled Core ML Parakeet engine. */
   transcribeCoreML: (
     path: string,

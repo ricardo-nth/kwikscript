@@ -63,6 +63,9 @@ const nativeTranscriptionJobs = new Map<string, ChildProcess>();
 const previewTempDirs = new Set<string>();
 const nativePreviewJobs = new Map<string, ChildProcess>();
 const previewBySource = new Map<string, { identity: string; url: string }>();
+const audioPreviewTempDirs = new Set<string>();
+const audioPreviewJobs = new Set<ChildProcess>();
+const audioPreviewBySource = new Map<string, { identity: string; url: string }>();
 
 function readableFile(path: unknown): path is string {
   if (typeof path !== "string" || !isAbsolute(path) || !existsSync(path)) return false;
@@ -295,6 +298,97 @@ async function extractAudioNative(path: string): Promise<ArrayBuffer | null> {
       resolve(copy.buffer);
     });
   });
+}
+
+/**
+ * Build a small, seek-friendly audio track for edited preview playback.
+ * Seeking a long-GOP HEVC video can stall Chromium for hundreds of
+ * milliseconds at every cut; the audio proxy stays responsive while the
+ * muted picture catches up. It never replaces the source used for export.
+ */
+async function prepareAudioPreviewNative(mediaPath: string): Promise<string | null> {
+  const ffmpeg = nativeFfmpegPath();
+  if (!ffmpeg) throw new Error("NATIVE_FFMPEG_UNAVAILABLE");
+
+  const stat = statSync(mediaPath);
+  const identity = `${stat.size}:${stat.mtimeMs}`;
+  const cached = audioPreviewBySource.get(mediaPath);
+  if (cached?.identity === identity) return cached.url;
+
+  const dir = mkdtempSync(join(tmpdir(), "kwikscript-audio-preview-"));
+  audioPreviewTempDirs.add(dir);
+  const output = join(dir, "preview.m4a");
+
+  try {
+    const available = await new Promise<boolean>((resolve, reject) => {
+      const child = spawn(
+        ffmpeg,
+        [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-i",
+          mediaPath,
+          "-map",
+          "0:a:0?",
+          "-vn",
+          "-c:a",
+          "aac",
+          "-b:a",
+          "128k",
+          "-map_metadata",
+          "-1",
+          "-movflags",
+          "+faststart",
+          "-y",
+          output,
+        ],
+        { stdio: ["ignore", "ignore", "pipe"] }
+      );
+      audioPreviewJobs.add(child);
+      const errors: Buffer[] = [];
+      let errorBytes = 0;
+      child.stderr?.on("data", (chunk: Buffer) => {
+        if (errorBytes >= 64 * 1024) return;
+        errors.push(chunk);
+        errorBytes += chunk.byteLength;
+      });
+      child.on("error", (error) => {
+        audioPreviewJobs.delete(child);
+        reject(error);
+      });
+      child.on("close", (code) => {
+        audioPreviewJobs.delete(child);
+        if (code === 0 && existsSync(output) && statSync(output).size > 0) {
+          resolve(true);
+          return;
+        }
+        const detail = Buffer.concat(errors).toString("utf8");
+        if (/does not contain any stream|matches no streams|output file does not contain/i.test(detail)) {
+          resolve(false);
+          return;
+        }
+        reject(new Error(detail.trim() || "Audio preview generation failed."));
+      });
+    });
+
+    if (!available) {
+      audioPreviewTempDirs.delete(dir);
+      rmSync(dir, { recursive: true, force: true });
+      return null;
+    }
+    const url = pathToFileURL(output).href;
+    audioPreviewBySource.set(mediaPath, { identity, url });
+    return url;
+  } catch (error) {
+    audioPreviewTempDirs.delete(dir);
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // The OS temp cleaner will recover anything still in use.
+    }
+    throw error;
+  }
 }
 
 /**
@@ -1014,6 +1108,14 @@ if (!gotLock) {
     const audio = await extractAudioNative(value);
     return { available: true, audio };
   });
+  ipcMain.handle("media:prepare-audio-preview", async (_event, value: unknown) => {
+    if (!readableFile(value)) throw new Error("The source media file is missing.");
+    if (!nativeFfmpegPath()) return { available: false as const };
+    const url = await prepareAudioPreviewNative(value);
+    return url
+      ? { available: true as const, url }
+      : { available: false as const };
+  });
   ipcMain.handle(
     "transcription:coreml",
     async (event, jobId: unknown, value: unknown) => {
@@ -1073,6 +1175,8 @@ if (!gotLock) {
     nativeTranscriptionJobs.clear();
     for (const child of nativePreviewJobs.values()) child.kill();
     nativePreviewJobs.clear();
+    for (const child of audioPreviewJobs) child.kill();
+    audioPreviewJobs.clear();
     for (const dir of exportTempDirs) {
       try {
         rmSync(dir, { recursive: true, force: true });
@@ -1090,6 +1194,15 @@ if (!gotLock) {
     }
     previewTempDirs.clear();
     previewBySource.clear();
+    for (const dir of audioPreviewTempDirs) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // The OS temp cleaner will recover anything still in use.
+      }
+    }
+    audioPreviewTempDirs.clear();
+    audioPreviewBySource.clear();
   });
 
   app.whenReady().then(() => {
