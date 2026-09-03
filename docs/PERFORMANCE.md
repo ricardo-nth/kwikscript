@@ -59,6 +59,8 @@ The 103.81-second `test2.mp4` fixture remains the transcript-quality check:
 - no half-video run of placeholder dots
 - literal `um` spans align with their audible waveform runs
 - `September first` resolves to separate, non-overlapping word spans
+- the `gym` → `because` decoder gap expands from 0.16 seconds to the observed
+  0.605-second acoustic pause without exposing extra Silero placeholders
 
 With the alignment model warm, repeated source and packaged-helper runs process
 this clip in about 5.6–7.8 seconds with no more than 130 MB maximum RSS. The

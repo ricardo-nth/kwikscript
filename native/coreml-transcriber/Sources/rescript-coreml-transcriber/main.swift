@@ -126,6 +126,7 @@ private struct RescriptCoreMLTranscriber {
         reportProgress(stage: "detecting-speech", fraction: 1)
         let words = wordsWithDisfluencies(
             timings: timings,
+            coverageTimings: decodedTimings,
             vadResults: vadResults,
             duration: result.duration
         )
@@ -232,15 +233,20 @@ private struct RescriptCoreMLTranscriber {
             candidatesByWord: candidatesByWord,
             expectedShift: expectedShift
         )
-        // Long TDT spans already provide useful context and are safer to grow
-        // against the waveform than to replace with an ambiguous keyword hit.
-        // Acoustic replacement is reserved for collapsed (one-frame) words —
-        // the failure mode that made deleting `first` cut `September` instead.
-        let conservative = replaceCollapsedWordTimings(source, with: selected)
+        // Keep reliable long TDT spans, but replace a phrase when its decoder
+        // onset lands in silence and ordered CTC evidence lands on speech.
+        // Collapsed one-frame words still use the narrower candidate directly.
+        let shiftedChunks = replaceMisplacedTimingChunks(
+            source,
+            with: selected,
+            audioSamples: audioSamples
+        )
+        let conservative = replaceCollapsedWordTimings(shiftedChunks, with: selected)
         let ordered = normalizeWordTimingOrder(conservative)
         let snapped = snapSilentTimingsToAudio(ordered, audioSamples: audioSamples)
         let expanded = expandWordTimingsToAudio(snapped, audioSamples: audioSamples)
-        let finalTimings = normalizeWordTimingOrder(expanded, minimumDuration: 0.001)
+        let tightened = tightenTranscriptGapsToAudio(expanded, audioSamples: audioSamples)
+        let finalTimings = normalizeWordTimingOrder(tightened, minimumDuration: 0.001)
         return finalTimings.map {
             WordTiming(word: $0.text, startTime: $0.start, endTime: $0.end)
         }
@@ -268,6 +274,7 @@ private struct RescriptCoreMLTranscriber {
     /// The audio remains untouched until ReScript cuts the inserted `...` word.
     private static func wordsWithDisfluencies(
         timings: [WordTiming],
+        coverageTimings: [WordTiming]? = nil,
         vadResults: [VadResult],
         duration: TimeInterval
     ) -> [RescriptWord] {
@@ -288,8 +295,11 @@ private struct RescriptCoreMLTranscriber {
             left.start == right.start ? left.end < right.end : left.start < right.start
         }
 
+        let coverageWords = (coverageTimings ?? timings).map { timing in
+            (start: timing.startTime, end: timing.endTime)
+        }
         var covered = Array(repeating: false, count: vadResults.count)
-        for word in baseWords {
+        for word in coverageWords {
             let first = max(0, Int(floor(word.start / frameSeconds)))
             let last = min(vadResults.count, Int(ceil(word.end / frameSeconds)))
             if first < last {

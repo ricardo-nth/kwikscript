@@ -35,6 +35,13 @@ transcript; the CTC lattice and waveform envelope repair collapsed word timing;
 Silero exposes omitted middle-of-sentence vocalisations as timed `...` words so
 the existing filler-word remove/restore flow can preview and cut them.
 
+Alignment also treats transcript pauses as phrase boundaries. When a decoder
+phrase starts in low-energy audio but the ordered CTC path starts on speech, the
+phrase timing is corrected as a unit; waveform evidence can then trim quiet
+tails from the word before the pause. This gives zero-padding pause removal a
+tighter result without allowing the separate quiet-audio tool to cut through a
+recognized word.
+
 Run the deterministic alignment regression checks with:
 
 ```sh

@@ -34,7 +34,7 @@ public func selectOrderedAcousticTimings(
     candidatesByWord: [[AcousticWordCandidate]],
     maxCenterShift: TimeInterval = 0.9,
     expectedShift: TimeInterval? = nil,
-    splitGap: TimeInterval = 0.18
+    splitGap: TimeInterval = 0.12
 ) -> [TranscriptWordTiming] {
     guard !words.isEmpty else { return [] }
     var output: [TranscriptWordTiming] = []
@@ -70,9 +70,17 @@ private func selectOrderedAcousticTimingChunk(
     }
     let options: [[Option]] = words.enumerated().map { index, word in
         let center = (word.start + word.end) / 2
+        let rawDuration = max(0.01, word.end - word.start)
+        let letterCount = max(1, word.text.filter(\.isLetter).count)
+        let maximumCandidateDuration = max(
+            0.4,
+            rawDuration * 2.5,
+            Double(letterCount) * 0.14
+        )
         var out = (index < candidatesByWord.count ? candidatesByWord[index] : [])
             .filter {
                 $0.end > $0.start && $0.score >= -20 &&
+                    $0.end - $0.start <= maximumCandidateDuration &&
                     abs(($0.start + $0.end) / 2 - center) <= maxCenterShift
             }
             .map { candidate in
@@ -185,10 +193,95 @@ public func replaceCollapsedWordTimings(
 ) -> [TranscriptWordTiming] {
     source.indices.map { index in
         guard index < aligned.count else { return source[index] }
-        return source[index].end - source[index].start <= maximumDuration
-            ? aligned[index]
-            : source[index]
+        guard source[index].end - source[index].start <= maximumDuration else {
+            return source[index]
+        }
+        let candidateCenter = (aligned[index].start + aligned[index].end) / 2
+        if index > 0 {
+            let previousCenter = (source[index - 1].start + source[index - 1].end) / 2
+            guard candidateCenter > previousCenter else { return source[index] }
+        }
+        if index + 1 < source.count {
+            let nextCenter = (source[index + 1].start + source[index + 1].end) / 2
+            guard candidateCenter < nextCenter else { return source[index] }
+        }
+        return aligned[index]
     }
+}
+
+/// Replace a contiguous decoder phrase with its ordered CTC path when the
+/// phrase begins in silence but the acoustic path begins on clear speech.
+///
+/// Decoder timing drift commonly resets after a real pause: the first word of
+/// the next phrase can be early while its neighbours share the same offset.
+/// Moving only that first word would overlap the following words, so the whole
+/// no-gap phrase is replaced as one unit. Phrases whose decoder onset already
+/// overlaps speech stay untouched; this preserves reliable long-word timings.
+public func replaceMisplacedTimingChunks(
+    _ source: [TranscriptWordTiming],
+    with aligned: [TranscriptWordTiming],
+    audioSamples: [Float],
+    sampleRate: Int = 16_000,
+    hopSeconds: TimeInterval = 0.005,
+    splitGap: TimeInterval = 0.12,
+    minimumCenterShift: TimeInterval = 0.08
+) -> [TranscriptWordTiming] {
+    guard source.count == aligned.count, !source.isEmpty,
+          !audioSamples.isEmpty, sampleRate > 0 else { return source }
+    let levels = audioEnvelope(
+        audioSamples: audioSamples,
+        sampleRate: sampleRate,
+        hopSeconds: hopSeconds
+    )
+    guard !levels.isEmpty else { return source }
+
+    let floor = percentile(levels, fraction: 0.1)
+    let speechLevel = percentile(levels, fraction: 0.8)
+    let threshold = max(0.0001, floor * 2.5, floor + 0.1 * (speechLevel - floor))
+    let lastFrame = levels.count - 1
+    func clampedFrame(_ time: TimeInterval) -> Int {
+        min(lastFrame, max(0, Int((time / hopSeconds).rounded())))
+    }
+    func peak(in timing: TranscriptWordTiming) -> Float {
+        let start = clampedFrame(timing.start)
+        let end = clampedFrame(timing.end)
+        return levels[min(start, end)...max(start, end)].max() ?? 0
+    }
+
+    var output = source
+    var chunkStart = 0
+    while chunkStart < source.count {
+        var chunkEnd = chunkStart + 1
+        while chunkEnd < source.count,
+              source[chunkEnd].start - source[chunkEnd - 1].end < splitGap {
+            chunkEnd += 1
+        }
+
+        let rawFirst = source[chunkStart]
+        let alignedFirst = aligned[chunkStart]
+        let rawCenter = (rawFirst.start + rawFirst.end) / 2
+        let alignedCenter = (alignedFirst.start + alignedFirst.end) / 2
+        let alignedDuration = alignedFirst.end - alignedFirst.start
+        if alignedDuration >= 0.04,
+           abs(alignedCenter - rawCenter) >= minimumCenterShift,
+           peak(in: rawFirst) < threshold,
+           peak(in: alignedFirst) >= threshold {
+            let direction = alignedCenter > rawCenter ? 1.0 : -1.0
+            for index in chunkStart..<chunkEnd {
+                let raw = source[index]
+                let candidate = aligned[index]
+                let rawWordCenter = (raw.start + raw.end) / 2
+                let candidateCenter = (candidate.start + candidate.end) / 2
+                let shift = candidateCenter - rawWordCenter
+                guard candidate.end - candidate.start >= 0.04,
+                      abs(shift) >= minimumCenterShift,
+                      shift * direction > 0 else { break }
+                output[index] = aligned[index]
+            }
+        }
+        chunkStart = chunkEnd
+    }
+    return output
 }
 
 /// Move a timing that lands entirely in near-silence onto the closest audible
@@ -213,7 +306,7 @@ public func snapSilentTimingsToAudio(
 
     let floor = percentile(envelope, fraction: 0.1)
     let speechLevel = percentile(envelope, fraction: 0.8)
-    let threshold = max(0.0001, floor * 2.5, floor + 0.04 * (speechLevel - floor))
+    let threshold = max(0.0001, floor * 2.5, floor + 0.1 * (speechLevel - floor))
     let maximumGapFrames = max(1, Int((0.015 / hopSeconds).rounded()))
     let minimumRunFrames = max(1, Int((0.02 / hopSeconds).rounded()))
     var runs: [(start: Int, end: Int)] = []
@@ -257,6 +350,11 @@ public func snapSilentTimingsToAudio(
         let upperCenter = index + 1 < words.count
             ? (words[index + 1].start + words[index + 1].end) / 2
             : .infinity
+        let upperWordStart = index + 1 < words.count
+            ? words[index + 1].start
+            : .infinity
+        let cleanedWord = words[index].text.lowercased().filter(\.isLetter)
+        let isFilledPause = cleanedWord == "um" || cleanedWord == "uh"
         let originalDuration = max(hopSeconds, words[index].end - words[index].start)
         let candidate = runs
             .map { run -> (start: TimeInterval, end: TimeInterval, center: TimeInterval, distance: TimeInterval) in
@@ -282,7 +380,10 @@ public func snapSilentTimingsToAudio(
                 return (proposedStart, proposedEnd, proposedCenter, abs(proposedCenter - center))
             }
             .filter { item in
-                item.distance <= maxShift && item.center > lowerCenter && item.start < upperCenter
+                let respectsNextWord = isFilledPause
+                    ? item.start < upperCenter
+                    : item.end <= upperWordStart + 0.02
+                return item.distance <= maxShift && item.center > lowerCenter && respectsNextWord
             }
             .min { $0.distance < $1.distance }
         guard let candidate else { continue }
@@ -309,6 +410,77 @@ public func snapSilentTimingsToAudio(
                     end: max(output[index + 1].end, runEnd + hopSeconds)
                 )
             }
+        }
+    }
+    return output
+}
+
+/// Tighten the trailing word edge around a pause that the decoder already found.
+///
+/// TDT timings preserve word order well, but they can distribute a real pause
+/// across the neighbouring word spans. That makes a transcript-gap editor keep
+/// breaths and room tone even with zero padding. The transcript remains the
+/// authority here: this function never invents a pause inside continuous text.
+/// It only extends an existing decoder gap through contiguous low-energy audio,
+/// with a strict adjustment limit on the protected trailing word boundary.
+public func tightenTranscriptGapsToAudio(
+    _ words: [TranscriptWordTiming],
+    audioSamples: [Float],
+    sampleRate: Int = 16_000,
+    hopSeconds: TimeInterval = 0.005,
+    minimumDecoderGap: TimeInterval = 0.08,
+    maximumBoundaryAdjustment: TimeInterval = 0.45,
+    minimumWordDuration: TimeInterval = 0.04
+) -> [TranscriptWordTiming] {
+    guard words.count > 1, !audioSamples.isEmpty, sampleRate > 0 else { return words }
+    let levels = audioEnvelope(
+        audioSamples: audioSamples,
+        sampleRate: sampleRate,
+        hopSeconds: hopSeconds
+    )
+    guard !levels.isEmpty else { return words }
+
+    let floor = percentile(levels, fraction: 0.1)
+    let speechLevel = percentile(levels, fraction: 0.8)
+    let threshold = max(0.0001, floor * 2.5, floor + 0.1 * (speechLevel - floor))
+    let lastFrame = levels.count - 1
+    let confirmationFrames = max(1, Int((0.01 / hopSeconds).rounded()))
+    func clampedFrame(_ time: TimeInterval) -> Int {
+        min(lastFrame, max(0, Int((time / hopSeconds).rounded())))
+    }
+    func hasActiveFrames(endingAt end: Int) -> Bool {
+        let start = end - confirmationFrames + 1
+        guard start >= 0 else { return false }
+        return levels[start...end].allSatisfy { $0 >= threshold }
+    }
+    var output = words
+    for index in 0..<(words.count - 1) {
+        let left = words[index]
+        let right = words[index + 1]
+        let decoderGap = right.start - left.end
+        guard decoderGap >= minimumDecoderGap else { continue }
+
+        let gapStartFrame = clampedFrame(left.end)
+        let gapEndFrame = clampedFrame(right.start)
+        guard gapStartFrame <= gapEndFrame else { continue }
+        guard let seed = (gapStartFrame...gapEndFrame).min(by: {
+            levels[$0] < levels[$1]
+        }), levels[seed] < threshold else { continue }
+
+        let leftLimit = clampedFrame(max(left.start, left.end - maximumBoundaryAdjustment))
+        var quietStartFrame = seed
+        while quietStartFrame > leftLimit {
+            if hasActiveFrames(endingAt: quietStartFrame - 1) { break }
+            quietStartFrame -= 1
+        }
+
+        let acousticGapStart = Double(quietStartFrame) * hopSeconds
+        if acousticGapStart < left.end {
+            output[index] = TranscriptWordTiming(
+                text: left.text,
+                start: left.start,
+                end: max(left.start + minimumWordDuration, acousticGapStart)
+            )
         }
     }
     return output
