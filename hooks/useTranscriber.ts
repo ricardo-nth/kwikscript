@@ -45,7 +45,9 @@ export function useTranscriber() {
             ? en["progress.extractingAudio"]
             : stage === "transcribing"
               ? en["progress.transcribing"]
-              : en["progress.loadingSpeechModel"];
+              : stage === "aligning-words"
+                ? en["progress.aligning"]
+                : en["progress.loadingSpeechModel"];
         s.setProgress({
           message,
           value: fraction > 0 && fraction < 1 ? fraction : null,

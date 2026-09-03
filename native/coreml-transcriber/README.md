@@ -27,8 +27,16 @@ The explicit C++ include path works around an Apple Command Line Tools 26 issue
 where Swift Package Manager does not discover the SDK's libc++ headers. It is
 only needed while compiling the helper, not while running it.
 
-The first run downloads the pinned Parakeet v3 Core ML model and native Silero
-VAD model. FluidAudio keeps both in its user cache, so rebuilding or replacing
-the app does not download them again. Parakeet supplies verbatim word timings;
+The first run downloads the pinned Parakeet v3 Core ML model, a 99 MB Parakeet
+CTC Core ML model used only for acoustic word alignment, and the native Silero
+VAD model. FluidAudio keeps all three in its user cache, so rebuilding or
+replacing the app does not download them again. Parakeet supplies the verbatim
+transcript; the CTC lattice and waveform envelope repair collapsed word timing;
 Silero exposes omitted middle-of-sentence vocalisations as timed `...` words so
 the existing filler-word remove/restore flow can preview and cut them.
+
+Run the deterministic alignment regression checks with:
+
+```sh
+npm run test:native:alignment
+```

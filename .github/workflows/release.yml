@@ -36,6 +36,7 @@ jobs:
           npm run typecheck:electron
           npm run test:i18n
           npm run test:timeline
+          npm run test:native:alignment
 
       - name: Build unsigned Apple-Silicon app
         run: npm run dist

@@ -14,6 +14,8 @@ handoff.
 ## What this fork adds
 
 - Native Parakeet v3 transcription through Core ML and the Apple Neural Engine.
+- Core ML acoustic word alignment so transcript selections match the visible
+  waveform closely enough for safe word cuts and pause protection.
 - Native Silero VAD recovery for vocalisations Parakeet heard but did not emit.
 - Filler-word removal that can be previewed, removed, and restored.
 - Separate transcript-pause and waveform-quiet cleanup tools. The waveform tool
@@ -39,9 +41,10 @@ imports, exports, and FCPXML workflow remain inherited from Rescript.
 - English and one speaker are the tested path.
 - [Homebrew FFmpeg](https://formulae.brew.sh/formula/ffmpeg) is currently a
   runtime prerequisite. It is deliberately not bundled yet.
-- The first transcription downloads approximately 470 MB of Parakeet v3 Core
-  ML models plus a roughly 1 MB Silero model. FluidAudio caches them under the
-  user Library, so rebuilding or replacing the app does not download them again.
+- The first transcription downloads approximately 460 MB of Parakeet v3 Core
+  ML models, a 99 MB Core ML word-alignment model, and a roughly 1 MB Silero
+  model. FluidAudio caches all three under the user Library, so rebuilding or
+  replacing the app does not download them again.
 - Local builds are ad-hoc signed. A public click-to-install binary still needs a
   Developer ID certificate and Apple notarization.
 - Intel Macs, Windows, Linux, and the web build are not maintained by this fork.
@@ -93,6 +96,7 @@ npm run electron:dev
 npm run lint
 npm run typecheck:electron
 npx tsc --noEmit
+npm run test:native:alignment
 npm run build:native:coreml
 ```
 

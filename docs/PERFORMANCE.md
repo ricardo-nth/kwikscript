@@ -9,7 +9,7 @@ worth the engineering cost.
 - MacBook with Apple M1
 - 8 GB unified memory
 - Apple-Silicon release build
-- Parakeet v3 Core ML int8, warm model cache
+- Parakeet v3 Core ML int8 plus CTC acoustic alignment, warm model cache
 - Native Homebrew FFmpeg 8.1.2
 
 ## Real-world source
@@ -57,6 +57,13 @@ The 103.81-second `test2.mp4` fixture remains the transcript-quality check:
 - one Silero hesitation placeholder
 - final word timestamp at 103.12 seconds
 - no half-video run of placeholder dots
+- literal `um` spans align with their audible waveform runs
+- `September first` resolves to separate, non-overlapping word spans
+
+With the alignment model warm, repeated source and packaged-helper runs process
+this clip in about 5.6–7.8 seconds with no more than 130 MB maximum RSS. The
+older nine-minute table above predates acoustic alignment and should be
+rebenchmarked before using it as the new end-to-end timing baseline.
 
 ## What to measure next
 

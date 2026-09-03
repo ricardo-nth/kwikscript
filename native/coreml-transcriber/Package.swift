@@ -14,11 +14,20 @@ let package = Package(
         ),
     ],
     targets: [
+        .target(
+            name: "CoreMLTranscriptionSupport"
+        ),
         .executableTarget(
             name: "rescript-coreml-transcriber",
             dependencies: [
+                "CoreMLTranscriptionSupport",
                 .product(name: "FluidAudio", package: "FluidAudio"),
             ]
+        ),
+        .executableTarget(
+            name: "acoustic-alignment-test",
+            dependencies: ["CoreMLTranscriptionSupport"],
+            path: "Tests/AcousticAlignmentTests"
         ),
     ]
 )

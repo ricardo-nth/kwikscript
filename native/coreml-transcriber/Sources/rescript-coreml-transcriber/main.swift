@@ -1,4 +1,5 @@
 import CoreML
+import CoreMLTranscriptionSupport
 import FluidAudio
 import Foundation
 
@@ -103,7 +104,15 @@ private struct RescriptCoreMLTranscriber {
             language: .english
         )
         reportProgress(stage: "transcribing", fraction: 1)
-        let timings = buildWordTimings(from: result.tokenTimings ?? [])
+        let decodedTimings = buildWordTimings(from: result.tokenTimings ?? [])
+
+        reportProgress(stage: "aligning-words", fraction: 0)
+        let timings = try await acousticallyAlign(
+            decodedTimings,
+            audioURL: audioURL,
+            duration: result.duration
+        )
+        reportProgress(stage: "aligning-words", fraction: 1)
 
         reportProgress(stage: "loading-vad", fraction: 0)
         let vad = try await VadManager(
@@ -129,6 +138,130 @@ private struct RescriptCoreMLTranscriber {
             realtimeFactor: result.rtfx,
             model: modelName
         )
+    }
+
+    /// Parakeet TDT timestamps describe decoder token emission, not a forced
+    /// acoustic alignment. That distinction is visible when a short word is
+    /// emitted early or collapsed into one 80 ms frame: deleting it cuts the
+    /// preceding word while the requested word remains audible. Run the native
+    /// Parakeet CTC model once, then select an ordered path through nearby word
+    /// detections. Text and order remain owned by v3; only timestamps come from
+    /// the CTC acoustic evidence.
+    private static func acousticallyAlign(
+        _ timings: [WordTiming],
+        audioURL: URL,
+        duration: TimeInterval
+    ) async throws -> [WordTiming] {
+        guard !timings.isEmpty else { return [] }
+
+        let ctcModels = try await CtcModels.downloadAndLoad(variant: .ctc110m)
+        let modelDirectory = CtcModels.defaultCacheDirectory(for: .ctc110m)
+        let tokenizer = try await CtcTokenizer.load(from: modelDirectory)
+        let spotter = CtcKeywordSpotter(
+            models: ctcModels,
+            blankId: ctcModels.vocabulary.count
+        )
+        let audioSamples = try AudioConverter().resampleAudioFile(audioURL)
+        let emptyVocabulary = CustomVocabularyContext(terms: [])
+        let acoustic = try await spotter.spotKeywordsWithLogProbs(
+            audioSamples: audioSamples,
+            customVocabulary: emptyVocabulary,
+            minScore: nil
+        )
+        guard !acoustic.logProbs.isEmpty, acoustic.frameDuration > 0 else {
+            throw NSError(
+                domain: "KwikScript.AcousticAlignment",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "The Core ML word aligner returned no acoustic timing data."]
+            )
+        }
+
+        let source = timings.map {
+            TranscriptWordTiming(text: $0.word, start: $0.startTime, end: $0.endTime)
+        }
+        let cleanedWords = source.map { timing in
+            timing.text
+                .lowercased()
+                .filter { $0.isLetter || $0.isNumber || $0 == "'" }
+        }
+        var terms: [CustomVocabularyTerm] = []
+        var termKeys = Set<String>()
+        for cleaned in cleanedWords where !cleaned.isEmpty {
+            for tokenIds in tokenizer.encodeVariants(cleaned) where !tokenIds.isEmpty {
+                let key = "\(cleaned):\(tokenIds.map(String.init).joined(separator: ","))"
+                if termKeys.insert(key).inserted {
+                    terms.append(CustomVocabularyTerm(text: cleaned, ctcTokenIds: tokenIds))
+                }
+            }
+        }
+        let detections = spotter.spotKeywordsFromLogProbs(
+            logProbs: acoustic.logProbs,
+            frameDuration: acoustic.frameDuration,
+            customVocabulary: CustomVocabularyContext(terms: terms, minTermLength: 1),
+            minScore: -50
+        ).detections
+        var candidatesByText: [String: [AcousticWordCandidate]] = [:]
+        for detection in detections {
+            let start = max(0, detection.startTime)
+            let end = min(duration, detection.endTime)
+            guard end > start else { continue }
+            candidatesByText[detection.term.textLowercased, default: []].append(
+                AcousticWordCandidate(
+                    start: start,
+                    end: end,
+                    score: detection.score,
+                    activity: meanAudioLevel(audioSamples, start: start, end: end)
+                )
+            )
+        }
+        let candidatesByWord = source.indices.map { index -> [AcousticWordCandidate] in
+            let word = source[index]
+            let center = (word.start + word.end) / 2
+            return (candidatesByText[cleanedWords[index]] ?? []).filter { candidate in
+                abs((candidate.start + candidate.end) / 2 - center) <= 0.9
+            }
+        }
+        reportProgress(stage: "aligning-words", fraction: 0.8)
+
+        let expectedShift = estimateDominantAcousticShift(
+            source,
+            candidatesByWord: candidatesByWord
+        )
+        let selected = selectOrderedAcousticTimings(
+            source,
+            candidatesByWord: candidatesByWord,
+            expectedShift: expectedShift
+        )
+        // Long TDT spans already provide useful context and are safer to grow
+        // against the waveform than to replace with an ambiguous keyword hit.
+        // Acoustic replacement is reserved for collapsed (one-frame) words —
+        // the failure mode that made deleting `first` cut `September` instead.
+        let conservative = replaceCollapsedWordTimings(source, with: selected)
+        let ordered = normalizeWordTimingOrder(conservative)
+        let snapped = snapSilentTimingsToAudio(ordered, audioSamples: audioSamples)
+        let expanded = expandWordTimingsToAudio(snapped, audioSamples: audioSamples)
+        let finalTimings = normalizeWordTimingOrder(expanded, minimumDuration: 0.001)
+        return finalTimings.map {
+            WordTiming(word: $0.text, startTime: $0.start, endTime: $0.end)
+        }
+    }
+
+    private static func meanAudioLevel(
+        _ samples: [Float],
+        start: TimeInterval,
+        end: TimeInterval,
+        sampleRate: Int = 16_000
+    ) -> Float {
+        let from = max(0, min(samples.count, Int(start * Double(sampleRate))))
+        let to = max(from, min(samples.count, Int(end * Double(sampleRate))))
+        guard to > from else { return 0 }
+        var sum = 0.0
+        for index in stride(from: from, to: to, by: 4) {
+            let value = Double(samples[index])
+            sum += value * value
+        }
+        let count = max(1, (to - from + 3) / 4)
+        return Float(sqrt(sum / Double(count)))
     }
 
     /// Recover filled pauses that Parakeet heard but intentionally omitted.

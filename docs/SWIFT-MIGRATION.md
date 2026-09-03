@@ -14,6 +14,7 @@ Electron / React editor
   ├─ native FFmpeg process for media extraction/export
   └─ Swift helper
        ├─ Parakeet v3 Core ML on Apple Neural Engine
+       ├─ Parakeet CTC Core ML acoustic word alignment
        └─ Silero Core ML VAD
 ```
 
