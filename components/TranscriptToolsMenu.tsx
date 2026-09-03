@@ -388,6 +388,7 @@ export default function TranscriptToolsMenu() {
   );
 
   const [openTool, setOpenTool] = useState<SilenceTool | null>(null);
+  const [previewTool, setPreviewTool] = useState<SilenceTool | null>(null);
   const [pausePreferences, setPausePreferences] =
     useState<SilencePreferences>(loadPausePreferences);
   const [quietPreferences, setQuietPreferences] = useState<SilencePreferences>(
@@ -460,10 +461,11 @@ export default function TranscriptToolsMenu() {
   );
 
   useEffect(() => {
-    setSilencePreviewRanges(pauseRanges);
-    setQuietAudioPreviewRanges(quietRanges);
+    setSilencePreviewRanges(previewTool === "pauses" ? pauseRanges : []);
+    setQuietAudioPreviewRanges(previewTool === "quiet" ? quietRanges : []);
   }, [
     pauseRanges,
+    previewTool,
     quietRanges,
     setQuietAudioPreviewRanges,
     setSilencePreviewRanges,
@@ -499,11 +501,15 @@ export default function TranscriptToolsMenu() {
     const isQuiet = tool === "quiet";
     const bounds = isQuiet ? quietBounds : pauseBounds;
     const isOpen = openTool === tool;
+    const isPreviewing = previewTool === tool;
     return (
       <Popover
         key={tool}
         open={isOpen}
-        onOpenChange={(nextOpen) => setOpenTool(nextOpen ? tool : null)}
+        onOpenChange={(nextOpen) => {
+          setOpenTool(nextOpen ? tool : null);
+          if (nextOpen) setPreviewTool(tool);
+        }}
         placement="bottom-end"
         backdrop
       >
@@ -524,10 +530,19 @@ export default function TranscriptToolsMenu() {
                   max: seconds(bounds.maxDuration),
                 },
               )}
-              onClick={() =>
-                setOpenTool((current) => (current === tool ? null : tool))
-              }
-              className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent dark:text-zinc-400 dark:hover:bg-zinc-800 dark:disabled:text-zinc-600"
+              onClick={() => {
+                const nextOpen = !isOpen;
+                setOpenTool(nextOpen ? tool : null);
+                setPreviewTool(nextOpen ? tool : null);
+              }}
+              aria-pressed={isPreviewing}
+              className={`flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent dark:disabled:text-zinc-600 ${
+                isPreviewing
+                  ? isQuiet
+                    ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                    : "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                  : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              }`}
             >
               {isQuiet ? <AudioWaveform size={14} /> : <Pause size={14} />}
               <span className="hidden min-[560px]:inline">
@@ -557,6 +572,7 @@ export default function TranscriptToolsMenu() {
             onRemove={() => {
               cutSilenceRanges(ranges);
               setOpenTool(null);
+              setPreviewTool(null);
             }}
           />
         </div>
@@ -566,11 +582,25 @@ export default function TranscriptToolsMenu() {
 
   return (
     <div className="flex shrink-0 items-center gap-0.5">
+      {renderSilenceTool(
+        "quiet",
+        quietRanges,
+        quietPreferences,
+        updateQuietPreferences,
+        quietPanelId,
+      )}
+      <span
+        aria-hidden="true"
+        className="mx-1 h-4 w-px shrink-0 bg-zinc-200 dark:bg-zinc-700"
+      />
       {deletedFillerIds.length > 0 ? (
         <button
           type="button"
           title={t("tools.restoreFillersTitle")}
-          onClick={() => restoreWords(deletedFillerIds)}
+          onClick={() => {
+            setPreviewTool(null);
+            restoreWords(deletedFillerIds);
+          }}
           className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
         >
           <Undo2 size={14} />
@@ -586,7 +616,10 @@ export default function TranscriptToolsMenu() {
           type="button"
           disabled={fillerIds.length === 0}
           title={t("tools.removeFillersTitle")}
-          onClick={() => deleteWords(fillerIds)}
+          onClick={() => {
+            setPreviewTool(null);
+            deleteWords(fillerIds);
+          }}
           className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent dark:text-zinc-400 dark:hover:bg-zinc-800 dark:disabled:text-zinc-600"
         >
           <WandSparkles size={14} />
@@ -607,13 +640,6 @@ export default function TranscriptToolsMenu() {
         pausePreferences,
         updatePausePreferences,
         pausePanelId,
-      )}
-      {renderSilenceTool(
-        "quiet",
-        quietRanges,
-        quietPreferences,
-        updateQuietPreferences,
-        quietPanelId,
       )}
     </div>
   );

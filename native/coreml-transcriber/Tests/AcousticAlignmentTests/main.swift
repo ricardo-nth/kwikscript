@@ -132,6 +132,59 @@ check(
     "a silent timing cannot snap onto the following word and squeeze it away"
 )
 
+var continuousPhraseAudio = Array(repeating: Float(0.001), count: 16_000 * 2)
+for sample in Int(1.175 * 16_000)..<Int(1.6 * 16_000) {
+    continuousPhraseAudio[sample] = sample.isMultiple(of: 2) ? 0.2 : -0.2
+}
+for sample in Int(0.375 * 16_000)..<Int(0.395 * 16_000) {
+    continuousPhraseAudio[sample] = sample.isMultiple(of: 2) ? 0.02 : -0.02
+}
+let continuousPhraseWords = [
+    TranscriptWordTiming(text: "I'm", start: 0.84, end: 1.08),
+    TranscriptWordTiming(text: "glad", start: 1.08, end: 1.4),
+]
+let continuousPhraseAligned = [
+    continuousPhraseWords[0],
+    TranscriptWordTiming(text: "glad", start: 1.266, end: 1.425),
+]
+let repairedContinuousPhrase = snapSilentTimingsToAudio(
+    continuousPhraseWords,
+    alignedTimings: continuousPhraseAligned,
+    audioSamples: continuousPhraseAudio
+)
+check(
+    repairedContinuousPhrase[0].start >= 1.17 && repairedContinuousPhrase[0].start <= 1.18,
+    "a silent short word chooses the real phrase onset instead of an earlier noise burst"
+)
+check(
+    repairedContinuousPhrase[0].end == continuousPhraseAligned[1].start,
+    "the next word's acoustic onset splits a continuous speech run"
+)
+check(
+    repairedContinuousPhrase[1].start == continuousPhraseAligned[1].start,
+    "the following word keeps the shared acoustic boundary"
+)
+
+var fillerPhraseAudio = Array(repeating: Float(0.001), count: 16_000 * 2)
+for sample in Int(0.7 * 16_000)..<Int(1.2 * 16_000) {
+    fillerPhraseAudio[sample] = sample.isMultiple(of: 2) ? 0.2 : -0.2
+}
+let fillerPhraseWords = [
+    TranscriptWordTiming(text: "Um", start: 0.34, end: 0.57),
+    TranscriptWordTiming(text: "the", start: 0.72, end: 1.0),
+]
+let fillerPhraseAligned = [
+    fillerPhraseWords[0],
+    TranscriptWordTiming(text: "the", start: 0.82, end: 1.0),
+]
+let repairedFillerPhrase = snapSilentTimingsToAudio(
+    fillerPhraseWords,
+    alignedTimings: fillerPhraseAligned,
+    audioSamples: fillerPhraseAudio
+)
+check(repairedFillerPhrase[0].end == 0.82, "a filler stops at the next acoustic word onset")
+check(repairedFillerPhrase[1].start == 0.82, "the word after a filler is not collapsed")
+
 var gapAudio = Array(repeating: Float(0.001), count: 16_000 * 2)
 for sample in Int(0.2 * 16_000)..<Int(0.72 * 16_000) {
     gapAudio[sample] = sample.isMultiple(of: 2) ? 0.12 : -0.12

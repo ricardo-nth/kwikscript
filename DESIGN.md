@@ -61,7 +61,7 @@ Geist is the product face; system fallbacks cover every supported script. Contro
 
 ## Layout
 
-The editor is a resizable transcript/media workspace above a full-width timeline. Toolbar height and popover geometry remain stable across state changes. Small settings live in existing popovers; primary editing actions remain visible without navigating away from the transcript. Transcript pauses and waveform-defined quiet audio are separate top-level tools because they answer different editing questions and keep independent remembered settings. Kept transcript words are protected regions: waveform cleanup may tighten quiet audio around them, but cannot propose a cut through recognized speech.
+The editor is a resizable transcript/media workspace above a full-width timeline. Toolbar height and popover geometry remain stable across state changes. Small settings live in existing popovers; primary editing actions remain visible without navigating away from the transcript. The toolbar reads in editing order: waveform-defined quiet audio is the optional rough-cut stage, then a divider introduces transcript cleanup through filler words and pauses. These are separate top-level tools because they answer different editing questions and keep independent remembered settings. Kept transcript words are protected regions: waveform cleanup may tighten quiet audio around them, but cannot propose a cut through recognized speech.
 
 ## Elevation & Depth
 
@@ -75,7 +75,7 @@ Controls use 6–12 px radii: tighter for dense segmented controls, broader for 
 
 ### Foundational visual states
 
-Every action has visible hover, focus, pressed, disabled, and busy treatment. Loading indicators reserve their final geometry. Amber transcript-led and cool-gray waveform-led ranges are playable previews; red deleted ranges are committed and restorable. Candidate previews stay visible while settings popovers are closed so opening a tool is never required to inspect its proposed edit.
+Every action has visible hover, focus, pressed, disabled, and busy treatment. Loading indicators reserve their final geometry. Amber transcript-led and cool-gray waveform-led ranges are playable previews; red deleted ranges are committed and restorable. Only one silence tool owns the candidate layer at a time. Its pressed toolbar state remains visible and its candidates remain inspectable after the settings popover closes; activating the other silence tool replaces the layer, while entering filler-word cleanup clears it.
 
 ### Buttons and actions
 

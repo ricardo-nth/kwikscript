@@ -291,6 +291,7 @@ public func replaceMisplacedTimingChunks(
 /// genuine pause or onto a neighbouring sentence.
 public func snapSilentTimingsToAudio(
     _ words: [TranscriptWordTiming],
+    alignedTimings: [TranscriptWordTiming]? = nil,
     audioSamples: [Float],
     sampleRate: Int = 16_000,
     hopSeconds: TimeInterval = 0.005,
@@ -353,16 +354,27 @@ public func snapSilentTimingsToAudio(
         let upperWordStart = index + 1 < words.count
             ? words[index + 1].start
             : .infinity
+        let nextAcousticStart: TimeInterval? = {
+            guard index + 1 < words.count,
+                  index + 1 < (alignedTimings?.count ?? 0),
+                  let alignedNext = alignedTimings?[index + 1]
+            else { return nil }
+            let decodedNext = words[index + 1]
+            let hasIndependentAcousticBoundary =
+                abs(alignedNext.start - decodedNext.start) > 0.001 ||
+                abs(alignedNext.end - decodedNext.end) > 0.001
+            return hasIndependentAcousticBoundary ? alignedNext.start : nil
+        }()
         let cleanedWord = words[index].text.lowercased().filter(\.isLetter)
         let isFilledPause = cleanedWord == "um" || cleanedWord == "uh"
         let originalDuration = max(hopSeconds, words[index].end - words[index].start)
         let candidate = runs
-            .map { run -> (start: TimeInterval, end: TimeInterval, center: TimeInterval, distance: TimeInterval) in
+            .map { run -> (start: TimeInterval, end: TimeInterval, center: TimeInterval, distance: TimeInterval, acousticSplit: Bool) in
                 let audibleStart = Double(run.start) * hopSeconds
                 let audibleEnd = Double(run.end) * hopSeconds
                 let maximumSpan = originalDuration + 0.03
-                let proposedStart: TimeInterval
-                let proposedEnd: TimeInterval
+                var proposedStart: TimeInterval
+                var proposedEnd: TimeInterval
                 if audibleEnd - audibleStart <= maximumSpan {
                     proposedStart = audibleStart
                     proposedEnd = audibleEnd
@@ -376,13 +388,32 @@ public func snapSilentTimingsToAudio(
                     proposedStart = max(audibleStart, center - maximumSpan / 2)
                     proposedEnd = min(audibleEnd, proposedStart + maximumSpan)
                 }
+                var acousticSplit = false
+                // A short word can be decoded entirely in silence immediately
+                // before its real, continuous phrase. If the next word has a
+                // reliable CTC onset inside that audible run, use it as the
+                // shared boundary instead of rejecting the correct run or
+                // swallowing the following word.
+                if proposedEnd > upperWordStart + 0.02,
+                   let nextAcousticStart,
+                   nextAcousticStart > proposedStart + hopSeconds,
+                   nextAcousticStart < proposedEnd {
+                    proposedEnd = nextAcousticStart
+                    acousticSplit = true
+                }
                 let proposedCenter = (proposedStart + proposedEnd) / 2
-                return (proposedStart, proposedEnd, proposedCenter, abs(proposedCenter - center))
+                return (
+                    proposedStart,
+                    proposedEnd,
+                    proposedCenter,
+                    abs(proposedCenter - center),
+                    acousticSplit
+                )
             }
             .filter { item in
-                let respectsNextWord = isFilledPause
+                let respectsNextWord = item.acousticSplit || (isFilledPause
                     ? item.start < upperCenter
-                    : item.end <= upperWordStart + 0.02
+                    : item.end <= upperWordStart + 0.02)
                 return item.distance <= maxShift && item.center > lowerCenter && respectsNextWord
             }
             .min { $0.distance < $1.distance }

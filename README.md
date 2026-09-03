@@ -20,6 +20,8 @@ handoff.
 - Filler-word removal that can be previewed, removed, and restored.
 - Separate transcript-pause and waveform-quiet cleanup tools. The waveform tool
   never proposes a cut through a recognized word.
+- One active silence-preview layer at a time: cool gray for the optional
+  waveform rough cut, amber for transcript pauses, and red for committed cuts.
 - Independent remembered settings for each tool, including a manual loudness
   threshold for waveform cleanup.
 - Duration modes: **Up to** a duration or **Between** two durations.
@@ -125,13 +127,14 @@ The current M1/8 GB baseline and the Electron-to-Swift decision gates are in:
 
 1. Import the original video or a time-identical proxy.
 2. Let Core ML generate the word-timed transcript.
-3. Preview and remove filler words.
-4. Preview transcript pauses, then remove only the duration range you do not
+3. Optionally start with **Remove quiet audio** for a waveform-led rough cut of
+   obvious dead space. Tune threshold, duration, and padding while the cool-gray
+   candidates remain audible.
+4. Preview and remove filler words; this exits the waveform candidate view and
+   moves into transcript cleanup.
+5. Preview transcript pauses, then remove only the duration range you do not
    want.
-5. Use waveform cleanup to tighten low-level breaths and tails outside the
-   recognized words. Tune threshold, duration, and left/right padding while the
-   orange ranges remain audible.
-6. Apply the silence cuts, restoring any intentional pauses as needed.
+6. Restore any intentional pauses or quiet sections as needed.
 7. Export FCPXML and reconnect to the original 4K media in Final Cut Pro.
 8. Finish colour, captions, graphics, and delivery in Final Cut.
 

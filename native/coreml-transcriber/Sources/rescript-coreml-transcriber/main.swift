@@ -243,7 +243,11 @@ private struct RescriptCoreMLTranscriber {
         )
         let conservative = replaceCollapsedWordTimings(shiftedChunks, with: selected)
         let ordered = normalizeWordTimingOrder(conservative)
-        let snapped = snapSilentTimingsToAudio(ordered, audioSamples: audioSamples)
+        let snapped = snapSilentTimingsToAudio(
+            ordered,
+            alignedTimings: selected,
+            audioSamples: audioSamples
+        )
         let expanded = expandWordTimingsToAudio(snapped, audioSamples: audioSamples)
         let tightened = tightenTranscriptGapsToAudio(expanded, audioSamples: audioSamples)
         let finalTimings = normalizeWordTimingOrder(tightened, minimumDuration: 0.001)
