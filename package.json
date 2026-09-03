@@ -21,7 +21,7 @@
     "lint": "eslint",
     "test:i18n": "tsx tests/i18n-test.ts",
     "test:timeline": "tsx tests/serialize-timeline-test.ts",
-    "test:native:alignment": "CPLUS_INCLUDE_PATH=\"$(xcrun --sdk macosx --show-sdk-path)/usr/include/c++/v1\" swift run --package-path native/coreml-transcriber acoustic-alignment-test",
+    "test:native:alignment": "node scripts/test-native-alignment.mjs",
     "postinstall": "patch-package && node scripts/copy-assets.mjs",
     "build:electron": "node scripts/build-electron.mjs",
     "build:native:coreml": "node scripts/build-native-coreml.mjs",
