@@ -28,7 +28,7 @@ import MediaPreview from "./MediaPreview";
 import Timeline from "./Timeline";
 import CleanupSidebar from "./CleanupSidebar";
 import ExportDialog from "./ExportDialog";
-import { Download, Redo2, Undo2 } from "lucide-react";
+import { ArrowUpFromLine, Redo2, Undo2 } from "lucide-react";
 import LogoLoader from "./LogoLoader";
 import SettingsMenu from "./SettingsMenu";
 import ModelSelector, {
@@ -501,7 +501,7 @@ export default function Editor() {
               disabled={status !== "ready" && status !== "exporting"}
               className="flex ml-1 h-8 items-center gap-1.5 rounded-full bg-zinc-900 px-4 text-[13px] font-medium text-white transition hover:bg-zinc-700 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
-              <Download size={14} />
+              <ArrowUpFromLine size={14} />
               {t("editor.export")}
             </button>
             <div className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-700" />

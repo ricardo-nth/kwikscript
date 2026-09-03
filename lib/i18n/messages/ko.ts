@@ -2,7 +2,7 @@ import type { MessageKey } from "./en";
 
 /** Korean UI catalog. Every key in {@link en} must be present. */
 export const ko: Record<MessageKey, string> = {
-  "app.title": "Rescript — 텍스트를 편집하듯 동영상 편집",
+  "app.title": "KwikScript — 텍스트를 편집하듯 동영상 편집",
   "common.cancel": "취소",
   "common.close": "닫기",
   "common.delete": "삭제",
@@ -75,6 +75,8 @@ export const ko: Record<MessageKey, string> = {
   "transcript.noSpeech": "음성이 감지되지 않았습니다. 파일에 오디오가 있는지 확인하거나 자막을 가져오세요.",
   "transcript.cut": "컷",
   "transcript.follow": "재생 위치 따라가기",
+  "transcript.playOnWordClick": "단어 선택 시 재생",
+  "transcript.seekOnlyOnWordClick": "단어 선택 시 위치만 이동",
   "transcript.hideDeleted": "삭제된 단어 숨기기",
   "transcript.showDeleted": "삭제된 단어 보기",
   "transcript.correct": "수정",

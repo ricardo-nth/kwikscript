@@ -2,7 +2,7 @@ import type { MessageKey } from "./en";
 
 /** Japanese UI catalog. Every key in {@link en} must be present. */
 export const ja: Record<MessageKey, string> = {
-  "app.title": "Rescript — テキストを編集するように動画を編集",
+  "app.title": "KwikScript — テキストを編集するように動画を編集",
   "common.cancel": "キャンセル",
   "common.close": "閉じる",
   "common.delete": "削除",
@@ -75,6 +75,8 @@ export const ja: Record<MessageKey, string> = {
   "transcript.noSpeech": "音声が検出されませんでした。ファイルに音声があるか確認するか、文字起こしをインポートしてください。",
   "transcript.cut": "カット",
   "transcript.follow": "再生位置に追従",
+  "transcript.playOnWordClick": "単語を選択したら再生",
+  "transcript.seekOnlyOnWordClick": "単語を選択したら移動のみ",
   "transcript.hideDeleted": "削除済みの単語を隠す",
   "transcript.showDeleted": "削除済みの単語を表示",
   "transcript.correct": "修正",

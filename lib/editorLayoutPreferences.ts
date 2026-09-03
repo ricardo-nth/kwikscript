@@ -1,5 +1,7 @@
 export const CLEANUP_SIDEBAR_STORAGE_KEY = "kwikscript.cleanup-sidebar-visible";
 export const VIDEO_PREVIEW_STORAGE_KEY = "kwikscript.video-preview-visible";
+export const WORD_CLICK_PLAYBACK_STORAGE_KEY =
+  "kwikscript.word-click-playback";
 
 function loadBoolean(storageKey: string, fallback: boolean): boolean {
   if (typeof window === "undefined") return fallback;
@@ -34,4 +36,12 @@ export function loadVideoPreviewVisible(): boolean {
 
 export function saveVideoPreviewVisible(value: boolean): void {
   saveBoolean(VIDEO_PREVIEW_STORAGE_KEY, value);
+}
+
+export function loadWordClickPlayback(): boolean {
+  return loadBoolean(WORD_CLICK_PLAYBACK_STORAGE_KEY, true);
+}
+
+export function saveWordClickPlayback(value: boolean): void {
+  saveBoolean(WORD_CLICK_PLAYBACK_STORAGE_KEY, value);
 }

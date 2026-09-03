@@ -74,6 +74,8 @@ export const en = {
   "transcript.noSpeech": "No speech detected. Make sure this file has audio, or import a transcript.",
   "transcript.cut": "Cut",
   "transcript.follow": "Follow playhead",
+  "transcript.playOnWordClick": "Play when selecting words",
+  "transcript.seekOnlyOnWordClick": "Seek only when selecting words",
   "transcript.hideDeleted": "Hide deleted words",
   "transcript.showDeleted": "Show deleted words",
   "transcript.correct": "Correct",

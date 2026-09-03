@@ -103,11 +103,13 @@ export function useTranscriptSelection({
    * not clear the transcript selection — used by Correct / Speaker pickers.
    */
   freezeSelectionRef,
+  playOnWordClick,
 }: {
   containerRef: RefObject<HTMLElement | null>;
   scrollRef: RefObject<HTMLElement | null>;
   cutOutIds: Set<number>;
   freezeSelectionRef: RefObject<boolean>;
+  playOnWordClick: boolean;
 }) {
   const selectedWordIds = useEditorStore((s) => s.selectedWordIds);
   const setSelectedWords = useEditorStore((s) => s.setSelectedWords);
@@ -170,8 +172,11 @@ export function useTranscriptSelection({
   }, []);
 
   const seekToWord = useCallback((word: Word) => {
-    useEditorStore.getState().playFrom(word.start + PLAYHEAD_EPSILON_S);
-  }, []);
+    const editor = useEditorStore.getState();
+    const time = word.start + PLAYHEAD_EPSILON_S;
+    if (playOnWordClick) editor.playFrom(time);
+    else editor.seekTo(time);
+  }, [playOnWordClick]);
 
   const handleWordClick = useCallback(
     (word: Word, el: HTMLElement) => {

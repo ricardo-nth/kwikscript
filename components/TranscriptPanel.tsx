@@ -10,14 +10,15 @@ import React, {
 } from "react";
 import {
   ArrowDown,
+  ArrowDownToLine,
   ArrowUp,
-  ArrowUpFromLine,
   ChevronLast,
   Check,
   Eye,
   EyeOff,
   Merge,
   Pencil,
+  Play,
   RotateCcw,
   Scissors,
   Plus,
@@ -55,6 +56,10 @@ import { findActiveWordId, groupWordsBySpeaker } from "@/lib/transcript";
 import { isTypingTarget } from "@/lib/keyboard";
 import { useI18n } from "./I18nProvider";
 import { localizeRuntimeMessage } from "@/lib/i18n";
+import {
+  loadWordClickPlayback,
+  saveWordClickPlayback,
+} from "@/lib/editorLayoutPreferences";
 
 const WordSpan = memo(function WordSpan({
   word,
@@ -266,6 +271,9 @@ export default function TranscriptPanel() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const correctInputRef = useRef<HTMLInputElement>(null);
   const [speakerDetectionEnabled] = useState(loadSpeakerDetectionPreference);
+  const [playOnWordClick, setPlayOnWordClick] = useState(
+    loadWordClickPlayback,
+  );
   const [correcting, setCorrecting] = useState<{ ids: number[] } | null>(null);
   const [correctText, setCorrectText] = useState("");
   const [assigningSpeaker, setAssigningSpeaker] = useState<{
@@ -285,6 +293,7 @@ export default function TranscriptPanel() {
     scrollRef,
     cutOutIds,
     freezeSelectionRef,
+    playOnWordClick,
   });
 
   const {
@@ -610,7 +619,7 @@ export default function TranscriptPanel() {
                 title={t("transcript.replace")}
                 className="flex cursor-pointer h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
               >
-                <ArrowUpFromLine size={14} />
+                <ArrowDownToLine size={14} />
                 <span className="hidden sm:inline">{t("common.import")}</span>
                 <input
                   ref={importInputRef}
@@ -628,6 +637,38 @@ export default function TranscriptPanel() {
             </>
           )}
           <button
+            type="button"
+            aria-pressed={playOnWordClick}
+            aria-label={t(
+              playOnWordClick
+                ? "transcript.playOnWordClick"
+                : "transcript.seekOnlyOnWordClick",
+            )}
+            title={t(
+              playOnWordClick
+                ? "transcript.playOnWordClick"
+                : "transcript.seekOnlyOnWordClick",
+            )}
+            onClick={() => {
+              setPlayOnWordClick((current) => {
+                const next = !current;
+                saveWordClickPlayback(next);
+                return next;
+              });
+            }}
+            className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 ${
+              playOnWordClick
+                ? "bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-950/70"
+                : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            }`}
+          >
+            <Play
+              size={14}
+              fill={playOnWordClick ? "currentColor" : "none"}
+            />
+          </button>
+          <button
+            type="button"
             onClick={toggleShowDeleted}
             title={
               showDeleted

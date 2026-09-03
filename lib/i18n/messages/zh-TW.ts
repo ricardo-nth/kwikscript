@@ -2,7 +2,7 @@ import type { MessageKey } from "./en";
 
 /** Traditional Chinese UI catalog. Every key in {@link en} must be present. */
 export const zhTW: Record<MessageKey, string> = {
-  "app.title": "Rescript — 像編輯文字一樣編輯影片",
+  "app.title": "KwikScript — 像編輯文字一樣編輯影片",
   "common.cancel": "取消",
   "common.close": "關閉",
   "common.delete": "刪除",
@@ -74,6 +74,8 @@ export const zhTW: Record<MessageKey, string> = {
   "transcript.noSpeech": "未偵測到語音。請確認檔案有音訊，或匯入逐字稿。",
   "transcript.cut": "剪除",
   "transcript.follow": "跟隨播放頭",
+  "transcript.playOnWordClick": "選取文字時播放",
+  "transcript.seekOnlyOnWordClick": "選取文字時僅跳轉",
   "transcript.hideDeleted": "隱藏已刪除文字",
   "transcript.showDeleted": "顯示已刪除文字",
   "transcript.correct": "修正",

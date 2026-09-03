@@ -4,6 +4,7 @@ name: "KwikScript"
 description: "A compact, waveform-led desktop editor for turning spoken media into precise text and timeline cuts."
 colors:
   primary: "#18181b"
+  brand: "#dc2626"
   background: "#fafafa"
   surface: "#ffffff"
   text: "#18181b"
@@ -54,7 +55,7 @@ KwikScript should feel like a quiet editing console: waveform, transcript, and p
 
 ## Colors
 
-Neutral zinc surfaces carry the interface. Indigo is reserved for selection, red for filler-word cleanup and committed transcript-word cuts, amber/orange for transcript-pause candidates, and cool gray for playable waveform-led quiet-audio candidates. Pattern, strike-through, labels, and marker shape distinguish playable previews from committed edits so color never carries state alone. Dark mode preserves the semantic roles rather than inverting their meaning. Focus and high-contrast behavior must remain visible even when the neutral chrome is quiet.
+Neutral zinc surfaces carry the interface. A deep signal red belongs to the KwikScript app tile and brand mark; it does not replace neutral product chrome or the established semantic editing colors. Indigo is reserved for selection, red for filler-word cleanup and committed transcript-word cuts, amber/orange for transcript-pause candidates, and cool gray for playable waveform-led quiet-audio candidates. Pattern, strike-through, labels, and marker shape distinguish playable previews from committed edits so color never carries state alone. Dark mode preserves the semantic roles rather than inverting their meaning. Focus and high-contrast behavior must remain visible even when the neutral chrome is quiet.
 
 ## Typography
 
@@ -84,7 +85,7 @@ Solid neutral buttons commit primary actions. Ghost controls handle toolbar and 
 
 ### Navigation and data display
 
-The native desktop menu owns project history. The transcript, preview, and timeline preserve the same selected playhead and cut state. Clicking a transcript word seeks to that word and starts playback; clicking or dragging the timeline seeks without forcing playback. Counts appear beside the action they quantify. App-owned scroll surfaces share one slim neutral scrollbar baseline; the transcript alone hides it because its visible time rail is the authored replacement.
+The native desktop menu owns project history. The transcript, preview, and timeline preserve the same selected playhead and cut state. Clicking a transcript word seeks to that word and starts playback by default; a persistent toolbar toggle switches word clicks to seek-only for precise waveform inspection without stopping playback that is already running. Clicking or dragging the timeline seeks without forcing playback. Import arrows point into the editing workspace and export arrows point out toward the finishing workflow. Counts appear beside the action they quantify. App-owned scroll surfaces share one slim neutral scrollbar baseline; the transcript alone hides it because its visible time rail is the authored replacement.
 
 ### Forms and overlays
 
@@ -96,7 +97,7 @@ The original source remains authoritative for transcription and export. When Chr
 
 ### Iconography
 
-Lucide outline icons are canonical at 12–16 px in dense controls. Icons supplement rather than replace labels for non-universal editing operations.
+Lucide outline icons are canonical at 12–16 px in dense controls. Icons supplement rather than replace labels for non-universal editing operations. The app identity is a flat deep-red tile with a broad, segmented warm-white K: its separated bars echo transcript and timeline cuts while remaining legible at title-bar size.
 
 ### Motion
 

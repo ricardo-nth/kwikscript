@@ -2,7 +2,7 @@ import type { MessageKey } from "./en";
 
 /** Spanish UI catalog. Every key in {@link en} must be present. */
 export const es: Record<MessageKey, string> = {
-  "app.title": "Rescript — edita videos como editas texto",
+  "app.title": "KwikScript — edita videos como editas texto",
   "common.cancel": "Cancelar",
   "common.close": "Cerrar",
   "common.delete": "Eliminar",
@@ -75,6 +75,8 @@ export const es: Record<MessageKey, string> = {
   "transcript.noSpeech": "No se detectó voz. Asegúrate de que este archivo tenga audio, o importa una transcripción.",
   "transcript.cut": "Cortar",
   "transcript.follow": "Seguir cabezal",
+  "transcript.playOnWordClick": "Reproducir al seleccionar palabras",
+  "transcript.seekOnlyOnWordClick": "Solo saltar al seleccionar palabras",
   "transcript.hideDeleted": "Ocultar palabras eliminadas",
   "transcript.showDeleted": "Mostrar palabras eliminadas",
   "transcript.correct": "Corregir",
