@@ -49,27 +49,28 @@ body {
   -webkit-app-region: no-drag;
 }
 
-/* Slim scrollbars for panels and the timeline */
-.scrollbar-thin {
+/* Slim, tokenized scrollbars across app-owned surfaces. */
+* {
   scrollbar-width: thin;
   scrollbar-color: #d4d4d8 transparent;
 }
-.scrollbar-thin::-webkit-scrollbar {
+*::-webkit-scrollbar {
   height: 8px;
   width: 8px;
 }
-.scrollbar-thin::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   background: #d4d4d8;
   border-radius: 4px;
 }
-.scrollbar-thin::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* Tailwind's `scrollbar-none` only sets scrollbar-width; Safari before 18.2
-   needs this too. The transcript relies on it to hide its scrollbar in favour
-   of its own time rail (see TranscriptScrollIndicator). */
-.scrollbar-none::-webkit-scrollbar {
+/* The transcript replaces its native scrollbar with its own time rail. */
+.transcript-scrollbar-hidden {
+  scrollbar-width: none;
+}
+.transcript-scrollbar-hidden::-webkit-scrollbar {
   display: none;
 }
 
@@ -138,9 +139,9 @@ body {
   background-color: rgb(153 27 27 / 0.55);
 }
 
-.dark .scrollbar-thin {
+.dark * {
   scrollbar-color: #52525b transparent;
 }
-.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+.dark *::-webkit-scrollbar-thumb {
   background: #52525b;
 }

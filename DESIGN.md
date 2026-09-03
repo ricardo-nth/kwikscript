@@ -46,14 +46,14 @@ KwikScript should feel like a quiet editing console: waveform, transcript, and p
 - **Target markets:** Global desktop and web users; the repository’s nine UI locales are supported equally.
 - **Usage scene:** Long, processor-intensive local media sessions on laptops, with frequent timeline adjustments and reversible cleanup actions.
 - **Register:** Product. Familiarity, legibility, and stable controls take priority over decoration.
-- **Memorable signature:** The transcript and waveform share one edit state: orange previews remain playable, while red ranges represent committed cuts.
+- **Memorable signature:** The transcript and waveform share one edit state: amber transcript-led candidates and cool-gray waveform-led candidates remain playable, while red ranges represent committed cuts.
 - **Restraint:** Settings, export, and project-management surfaces remain compact and subordinate to the media.
 - **Anti-references:** Avoid template-dashboard cards, marketing gradients, oversized controls, or decorative motion that competes with timing information.
 - **Token ownership/runtime mapping:** This document mirrors the canonical Tailwind utilities and shared rules in `app/globals.css`; it does not generate runtime tokens.
 
 ## Colors
 
-Neutral zinc surfaces carry the interface. Indigo is reserved for selection, amber/orange for playable previews or caution, and red for committed deletion. Dark mode preserves these semantic roles rather than inverting their meaning. Focus and high-contrast behavior must remain visible even when the neutral chrome is quiet.
+Neutral zinc surfaces carry the interface. Indigo is reserved for selection, amber/orange for playable filler and transcript-pause candidates, cool gray for playable waveform-led quiet-audio candidates, and red for committed deletion. Pattern and marker shape reinforce these colors. Dark mode preserves the semantic roles rather than inverting their meaning. Focus and high-contrast behavior must remain visible even when the neutral chrome is quiet.
 
 ## Typography
 
@@ -75,7 +75,7 @@ Controls use 6–12 px radii: tighter for dense segmented controls, broader for 
 
 ### Foundational visual states
 
-Every action has visible hover, focus, pressed, disabled, and busy treatment. Loading indicators reserve their final geometry. Orange silence ranges are previews; red deleted ranges are committed and restorable.
+Every action has visible hover, focus, pressed, disabled, and busy treatment. Loading indicators reserve their final geometry. Amber transcript-led and cool-gray waveform-led ranges are playable previews; red deleted ranges are committed and restorable. Candidate previews stay visible while settings popovers are closed so opening a tool is never required to inspect its proposed edit.
 
 ### Buttons and actions
 
@@ -83,7 +83,7 @@ Solid neutral buttons commit primary actions. Ghost controls handle toolbar and 
 
 ### Navigation and data display
 
-The native desktop menu owns project history. The transcript, preview, and timeline preserve the same selected playhead and cut state. Counts appear beside the action they quantify.
+The native desktop menu owns project history. The transcript, preview, and timeline preserve the same selected playhead and cut state. Clicking a transcript word seeks to that word and starts playback; clicking or dragging the timeline seeks without forcing playback. Counts appear beside the action they quantify. App-owned scroll surfaces share one slim neutral scrollbar baseline; the transcript alone hides it because its visible time rail is the authored replacement.
 
 ### Forms and overlays
 

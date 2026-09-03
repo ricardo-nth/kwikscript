@@ -22,7 +22,7 @@ export const SILENCE_PAD = 0.05;
  */
 export function findSilenceCuts(
   words: Word[],
-  manualCuts: ManualCut[]
+  manualCuts: ManualCut[],
 ): TimeRange[] {
   const owned = manualCuts.filter((cut) => cut.source === "silence");
   if (owned.length > 0) {
@@ -34,7 +34,7 @@ export function findSilenceCuts(
     .filter(
       (c) =>
         c.end - c.start > 1e-4 &&
-        !words.some((w) => w.end > c.start + 1e-4 && w.start < c.end - 1e-4)
+        !words.some((w) => w.end > c.start + 1e-4 && w.start < c.end - 1e-4),
     )
     .map((c) => ({ start: c.start, end: c.end }));
 }
@@ -43,17 +43,22 @@ export function findSilenceCuts(
 export function addSilenceCuts(
   manualCuts: ManualCut[],
   ranges: TimeRange[],
-  nextId: number
+  nextId: number,
 ): { cuts: ManualCut[]; nextId: number } {
   const added: ManualCut[] = [];
   let id = nextId;
   for (const range of ranges) {
     if (range.end - range.start <= 1e-4) continue;
-    added.push({ id: id++, start: range.start, end: range.end, source: "silence" });
+    added.push({
+      id: id++,
+      start: range.start,
+      end: range.end,
+      source: "silence",
+    });
   }
   return {
     cuts: [...manualCuts, ...added].sort(
-      (left, right) => left.start - right.start || left.end - right.end
+      (left, right) => left.start - right.start || left.end - right.end,
     ),
     nextId: id,
   };
@@ -69,19 +74,19 @@ export function removeOwnedSilenceCuts(manualCuts: ManualCut[]): ManualCut[] {
  * to a spoken word. Each range appears before the first visible word whose
  * midpoint follows it; end-of-media silence is returned as `trailing`.
  */
-export function mapSilencePreviewsToWords(
+export function mapSilencePreviewsToWords<T extends TimeRange>(
   words: Word[],
-  ranges: TimeRange[]
-): { beforeWordId: Map<number, TimeRange[]>; trailing: TimeRange[] } {
+  ranges: T[],
+): { beforeWordId: Map<number, T[]>; trailing: T[] } {
   const orderedWords = words
     .slice()
     .sort((left, right) => left.start - right.start || left.end - right.end);
-  const beforeWordId = new Map<number, TimeRange[]>();
-  const trailing: TimeRange[] = [];
+  const beforeWordId = new Map<number, T[]>();
+  const trailing: T[] = [];
 
   for (const range of ranges) {
     const nextWord = orderedWords.find(
-      (word) => word.start + (word.end - word.start) / 2 >= range.end - 1e-4
+      (word) => word.start + (word.end - word.start) / 2 >= range.end - 1e-4,
     );
     if (!nextWord) {
       trailing.push(range);
@@ -102,7 +107,8 @@ function subtractCuts(range: TimeRange, cuts: TimeRange[]): TimeRange[] {
     parts = parts.flatMap((p) => {
       if (cut.end <= p.start + 1e-4 || cut.start >= p.end - 1e-4) return [p];
       const out: TimeRange[] = [];
-      if (cut.start > p.start + 1e-4) out.push({ start: p.start, end: cut.start });
+      if (cut.start > p.start + 1e-4)
+        out.push({ start: p.start, end: cut.start });
       if (cut.end < p.end - 1e-4) out.push({ start: cut.end, end: p.end });
       return out;
     });
@@ -129,7 +135,7 @@ export function findWaveformSilenceRanges(
   minDuration = MIN_SILENCE_DURATION,
   leftPad = SILENCE_PAD,
   rightPad = leftPad,
-  maxDuration = Number.POSITIVE_INFINITY
+  maxDuration = Number.POSITIVE_INFINITY,
 ): TimeRange[] {
   if (duration <= 0 || waveform.rms.length === 0 || threshold <= 0) return [];
 
@@ -145,7 +151,7 @@ export function findWaveformSilenceRanges(
     const start = Math.max(0, fromFrame * frameDuration);
     const end = Math.min(duration, toFrame * frameDuration);
     const editableQuietParts = subtractCuts({ start, end }, cuts).flatMap(
-      (part) => subtractCuts(part, protectedSpeech)
+      (part) => subtractCuts(part, protectedSpeech),
     );
 
     for (const part of editableQuietParts) {
@@ -158,10 +164,10 @@ export function findWaveformSilenceRanges(
       }
 
       const touchesSpeechOnLeft = protectedSpeech.some(
-        (speech) => Math.abs(speech.end - part.start) < 1e-4
+        (speech) => Math.abs(speech.end - part.start) < 1e-4,
       );
       const touchesSpeechOnRight = protectedSpeech.some(
-        (speech) => Math.abs(speech.start - part.end) < 1e-4
+        (speech) => Math.abs(speech.start - part.end) < 1e-4,
       );
       const touchesLoudAudioOnLeft =
         fromFrame > 0 && Math.abs(part.start - start) < 1e-4;
@@ -169,10 +175,14 @@ export function findWaveformSilenceRanges(
         toFrame < waveform.rms.length && Math.abs(part.end - end) < 1e-4;
       const paddedStart =
         part.start +
-        (touchesLoudAudioOnLeft || touchesSpeechOnLeft ? Math.max(0, leftPad) : 0);
+        (touchesLoudAudioOnLeft || touchesSpeechOnLeft
+          ? Math.max(0, leftPad)
+          : 0);
       const paddedEnd =
         part.end -
-        (touchesLoudAudioOnRight || touchesSpeechOnRight ? Math.max(0, rightPad) : 0);
+        (touchesLoudAudioOnRight || touchesSpeechOnRight
+          ? Math.max(0, rightPad)
+          : 0);
       if (paddedEnd - paddedStart > 1e-4) {
         out.push({ start: paddedStart, end: paddedEnd });
       }
@@ -204,7 +214,7 @@ export function findSilenceRanges(
   minDuration = MIN_SILENCE_DURATION,
   leftPad = SILENCE_PAD,
   rightPad = leftPad,
-  maxDuration = Number.POSITIVE_INFINITY
+  maxDuration = Number.POSITIVE_INFINITY,
 ): TimeRange[] {
   if (duration <= 0) return [];
 
@@ -243,16 +253,10 @@ export function findSilenceRanges(
   const out: TimeRange[] = [];
   for (const gap of gaps) {
     const gapDuration = gap.end - gap.start;
-    if (
-      gapDuration < minDuration - 1e-4 ||
-      gapDuration > maxDuration + 1e-4
-    ) {
+    if (gapDuration < minDuration - 1e-4 || gapDuration > maxDuration + 1e-4) {
       continue;
     }
-    for (const part of subtractCuts(
-      { start: gap.start, end: gap.end },
-      cuts
-    )) {
+    for (const part of subtractCuts({ start: gap.start, end: gap.end }, cuts)) {
       if (part.end - part.start < minDuration - 1e-4) continue;
       // Only pad edges that still sit against speech (not against a prior cut).
       const touchesSpeechOnLeft =
@@ -261,8 +265,7 @@ export function findSilenceRanges(
         gap.padEnd && Math.abs(part.end - gap.end) < 1e-4;
       const start =
         part.start + (touchesSpeechOnLeft ? Math.max(0, leftPad) : 0);
-      const end =
-        part.end - (touchesSpeechOnRight ? Math.max(0, rightPad) : 0);
+      const end = part.end - (touchesSpeechOnRight ? Math.max(0, rightPad) : 0);
       if (end - start > 1e-4) out.push({ start, end });
     }
   }

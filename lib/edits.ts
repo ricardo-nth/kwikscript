@@ -6,9 +6,6 @@ import type {
   Word,
 } from "./types";
 
-/** Padding (s) applied when merging adjacent deleted words into one cut. */
-const MERGE_GAP = 0.35;
-
 /** Minimum kept clip length after a trim (seconds). */
 export const MIN_CLIP_DURATION = 0.05;
 
@@ -35,11 +32,10 @@ export function getWordCutRanges(words: Word[], duration: number): TimeRange[] {
     }
     ranges.push({ start, end });
   }
-  return mergeCutRanges(ranges, duration);
+  return mergeRanges(ranges, duration);
 }
 
-/** Merge overlapping / near-adjacent ranges and clamp to [0, duration]. */
-export function mergeCutRanges(ranges: TimeRange[], duration: number): TimeRange[] {
+function mergeRanges(ranges: TimeRange[], duration: number): TimeRange[] {
   if (ranges.length === 0) return [];
   const sorted = [...ranges]
     .map((r) => ({
@@ -52,13 +48,21 @@ export function mergeCutRanges(ranges: TimeRange[], duration: number): TimeRange
   const merged: TimeRange[] = [];
   for (const r of sorted) {
     const last = merged[merged.length - 1];
-    if (last && r.start - last.end < MERGE_GAP) {
+    if (last && r.start - last.end <= 1e-4) {
       last.end = Math.max(last.end, r.end);
     } else {
       merged.push({ ...r });
     }
   }
   return merged;
+}
+
+/** Merge overlapping or touching ranges and clamp to [0, duration]. */
+export function mergeCutRanges(
+  ranges: TimeRange[],
+  duration: number,
+): TimeRange[] {
+  return mergeRanges(ranges, duration);
 }
 
 /**
@@ -68,19 +72,26 @@ export function mergeCutRanges(ranges: TimeRange[], duration: number): TimeRange
 export function getCutRanges(
   words: Word[],
   duration: number,
-  manualCuts: Array<TimeRange | ManualCut> = []
+  manualCuts: Array<TimeRange | ManualCut> = [],
 ): TimeRange[] {
   const fromWords = getWordCutRanges(words, duration);
   const fromManual = manualCuts.map((c) => ({ start: c.start, end: c.end }));
-  return mergeCutRanges([...fromWords, ...fromManual], duration);
+  // Deleted words intentionally absorb tiny transcript gaps, but manual and
+  // silence cuts must never bridge kept media. Union the final list using
+  // overlap-only semantics so dense silence cleanup cannot swallow speech.
+  return mergeRanges([...fromWords, ...fromManual], duration);
 }
 
 /** Invert cut ranges into the ranges of the original media that remain. */
-export function getKeepRanges(cuts: TimeRange[], duration: number): TimeRange[] {
+export function getKeepRanges(
+  cuts: TimeRange[],
+  duration: number,
+): TimeRange[] {
   const keeps: TimeRange[] = [];
   let cursor = 0;
   for (const cut of cuts) {
-    if (cut.start > cursor + 1e-4) keeps.push({ start: cursor, end: cut.start });
+    if (cut.start > cursor + 1e-4)
+      keeps.push({ start: cursor, end: cut.start });
     cursor = Math.max(cursor, cut.end);
   }
   if (cursor < duration - 1e-4) keeps.push({ start: cursor, end: duration });
@@ -93,16 +104,14 @@ export function getKeepRanges(cuts: TimeRange[], duration: number): TimeRange[] 
  */
 export function getClipSegments(
   keepRanges: TimeRange[],
-  sceneBoundaries: SceneBoundary[]
+  sceneBoundaries: SceneBoundary[],
 ): ClipSegment[] {
-  const times = sceneBoundaries
-    .map((b) => b.time)
-    .sort((a, b) => a - b);
+  const times = sceneBoundaries.map((b) => b.time).sort((a, b) => a - b);
 
   const clips: ClipSegment[] = [];
   for (const keep of keepRanges) {
     const splits = times.filter(
-      (t) => t > keep.start + SPLIT_EPSILON && t < keep.end - SPLIT_EPSILON
+      (t) => t > keep.start + SPLIT_EPSILON && t < keep.end - SPLIT_EPSILON,
     );
     let cursor = keep.start;
     for (const t of splits) {
@@ -132,12 +141,12 @@ export function getClipSegments(
  */
 export function getActiveSceneBoundaries(
   boundaries: SceneBoundary[],
-  keepRanges: TimeRange[]
+  keepRanges: TimeRange[],
 ): SceneBoundary[] {
   return boundaries.filter((b) =>
     keepRanges.some(
-      (k) => b.time > k.start + SPLIT_EPSILON && b.time < k.end - SPLIT_EPSILON
-    )
+      (k) => b.time > k.start + SPLIT_EPSILON && b.time < k.end - SPLIT_EPSILON,
+    ),
   );
 }
 
@@ -149,14 +158,15 @@ export function getActiveSceneBoundaries(
  */
 export function mapSplitsToWords(
   words: Word[],
-  boundaries: SceneBoundary[]
+  boundaries: SceneBoundary[],
 ): Map<number, SceneBoundary> {
   const map = new Map<number, SceneBoundary>();
   for (const b of boundaries) {
     let i = words.findIndex((w) => w.start >= b.time);
     if (i === -1) i = words.length;
     const prev = words[i - 1];
-    if (prev && b.time < prev.end && b.time < (prev.start + prev.end) / 2) i -= 1;
+    if (prev && b.time < prev.end && b.time < (prev.start + prev.end) / 2)
+      i -= 1;
     if (i < words.length) map.set(words[i].id, b);
   }
   return map;
@@ -203,7 +213,7 @@ export function isWordCutOut(word: Word, cuts: TimeRange[]): boolean {
 export function deleteWordsCoveredBy(
   words: Word[],
   from: number,
-  to: number
+  to: number,
 ): Word[] {
   if (to <= from) return words;
   let changed = false;
@@ -222,7 +232,7 @@ export function deleteWordsCoveredBy(
 export function restoreWordsCoveredBy(
   words: Word[],
   from: number,
-  to: number
+  to: number,
 ): Word[] {
   if (to <= from) return words;
   let changed = false;
@@ -261,12 +271,15 @@ export function canSplitAt(
   t: number,
   duration: number,
   cuts: TimeRange[],
-  sceneBoundaries: SceneBoundary[]
+  sceneBoundaries: SceneBoundary[],
 ): boolean {
   if (t <= SPLIT_EPSILON || t >= duration - SPLIT_EPSILON) return false;
   if (cutRangeAt(t, cuts)) return false;
   for (const cut of cuts) {
-    if (Math.abs(t - cut.start) < SPLIT_EPSILON || Math.abs(t - cut.end) < SPLIT_EPSILON) {
+    if (
+      Math.abs(t - cut.start) < SPLIT_EPSILON ||
+      Math.abs(t - cut.end) < SPLIT_EPSILON
+    ) {
       return false;
     }
   }
@@ -285,8 +298,12 @@ export function clampWordBounds(
   index: number,
   nextStart: number,
   nextEnd: number,
-  duration: number
-): { start: number; end: number; neighborPatches: Array<{ index: number; start?: number; end?: number }> } {
+  duration: number,
+): {
+  start: number;
+  end: number;
+  neighborPatches: Array<{ index: number; start?: number; end?: number }>;
+} {
   const w = words[index];
   const minDur = 0.02;
   let start = Math.max(0, Math.min(nextStart, nextEnd - minDur));
@@ -333,7 +350,7 @@ export function applyWordBounds(
   wordId: number,
   nextStart: number,
   nextEnd: number,
-  duration: number
+  duration: number,
 ): Word[] | null {
   const index = words.findIndex((w) => w.id === wordId);
   if (index < 0) return null;
@@ -342,10 +359,14 @@ export function applyWordBounds(
     index,
     nextStart,
     nextEnd,
-    duration
+    duration,
   );
   const cur = words[index];
-  if (Math.abs(cur.start - start) < 1e-4 && Math.abs(cur.end - end) < 1e-4 && neighborPatches.length === 0) {
+  if (
+    Math.abs(cur.start - start) < 1e-4 &&
+    Math.abs(cur.end - end) < 1e-4 &&
+    neighborPatches.length === 0
+  ) {
     return null;
   }
   const next = words.map((w) => ({ ...w }));
@@ -368,7 +389,7 @@ export function shrinkManualCuts(
   manualCuts: ManualCut[],
   from: number,
   to: number,
-  nextId = 1_000_000
+  nextId = 1_000_000,
 ): { cuts: ManualCut[]; nextId: number } {
   if (to <= from) return { cuts: manualCuts, nextId };
   const out: ManualCut[] = [];
@@ -400,7 +421,7 @@ export function addManualCut(
   manualCuts: ManualCut[],
   start: number,
   end: number,
-  nextId: number
+  nextId: number,
 ): { cuts: ManualCut[]; nextId: number } {
   if (end - start < 1e-4) return { cuts: manualCuts, nextId };
   // Silence cleanup cuts remain separate even when a later trim overlaps them.
@@ -409,21 +430,24 @@ export function addManualCut(
   const silenceCuts = manualCuts.filter((cut) => cut.source === "silence");
   const generalCuts = manualCuts.filter((cut) => cut.source !== "silence");
   const merged = mergeCutRanges(
-    [...generalCuts.map((c) => ({ start: c.start, end: c.end })), { start, end }],
-    Number.POSITIVE_INFINITY
+    [
+      ...generalCuts.map((c) => ({ start: c.start, end: c.end })),
+      { start, end },
+    ],
+    Number.POSITIVE_INFINITY,
   );
   // Rebuild with stable-ish ids: keep old ids when a merged range covers an old cut's midpoint
   let id = nextId;
   const cuts: ManualCut[] = merged.map((r) => {
     const existing = generalCuts.find(
-      (c) => c.start >= r.start - 1e-4 && c.end <= r.end + 1e-4
+      (c) => c.start >= r.start - 1e-4 && c.end <= r.end + 1e-4,
     );
     if (existing) return { id: existing.id, start: r.start, end: r.end };
     return { id: id++, start: r.start, end: r.end };
   });
   return {
     cuts: [...silenceCuts, ...cuts].sort(
-      (left, right) => left.start - right.start || left.end - right.end
+      (left, right) => left.start - right.start || left.end - right.end,
     ),
     nextId: id,
   };
@@ -437,16 +461,20 @@ export function addManualCut(
 export function trimEdgeBounds(
   clip: ClipSegment,
   edge: "in" | "out",
-  cuts: TimeRange[]
+  cuts: TimeRange[],
 ): { lo: number; hi: number } {
   const eps = 1e-3;
   const gap = cuts.find((c) =>
     edge === "in"
       ? Math.abs(c.end - clip.start) < eps
-      : Math.abs(c.start - clip.end) < eps
+      : Math.abs(c.start - clip.end) < eps,
   );
   const lo =
-    edge === "in" ? (gap ? gap.start : clip.start) : clip.start + MIN_CLIP_DURATION;
+    edge === "in"
+      ? gap
+        ? gap.start
+        : clip.start
+      : clip.start + MIN_CLIP_DURATION;
   const hi =
     edge === "in" ? clip.end - MIN_CLIP_DURATION : gap ? gap.end : clip.end;
   return { lo: Math.min(lo, hi), hi: Math.max(lo, hi) };
@@ -461,13 +489,15 @@ export function trimEdgeBounds(
 export function carrySceneBoundaries(
   boundaries: SceneBoundary[],
   from: number,
-  to: number
+  to: number,
 ): SceneBoundary[] {
   if (!boundaries.some((b) => Math.abs(b.time - from) < SPLIT_EPSILON)) {
     return boundaries;
   }
   const moved = boundaries
-    .map((b) => (Math.abs(b.time - from) < SPLIT_EPSILON ? { ...b, time: to } : b))
+    .map((b) =>
+      Math.abs(b.time - from) < SPLIT_EPSILON ? { ...b, time: to } : b,
+    )
     .sort((a, b) => a.time - b.time);
 
   // Closing a gap completely can land two split points on top of each other.
@@ -488,7 +518,7 @@ export function restoreRangesResult(
   words: Word[],
   manualCuts: ManualCut[],
   ranges: TimeRange[],
-  nextCutId: number
+  nextCutId: number,
 ): { words: Word[]; manualCuts: ManualCut[]; nextCutId: number } | null {
   const usable = ranges.filter((r) => r.end - r.start > 1e-4);
   if (usable.length === 0) return null;
@@ -524,7 +554,7 @@ export function trimEdgeResult(
   edge: "in" | "out",
   from: number,
   to: number,
-  nextCutId: number
+  nextCutId: number,
 ): { words: Word[]; manualCuts: ManualCut[]; nextCutId: number } | null {
   if (Math.abs(to - from) < 1e-4) return null;
   const lo = Math.min(from, to);

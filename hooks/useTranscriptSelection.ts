@@ -27,7 +27,7 @@ function sameIds(a: number[], b: number[]): boolean {
 /** Walk up from a Range boundary to the nearest word span inside `container`. */
 function wordElFromNode(
   node: Node | null,
-  container: HTMLElement
+  container: HTMLElement,
 ): HTMLElement | null {
   let n: Node | null = node;
   while (n && n !== container) {
@@ -37,10 +37,7 @@ function wordElFromNode(
   return null;
 }
 
-function wordElsInRange(
-  container: HTMLElement,
-  range: Range
-): HTMLElement[] {
+function wordElsInRange(container: HTMLElement, range: Range): HTMLElement[] {
   const all = container.querySelectorAll<HTMLElement>("[data-wid]");
   if (all.length === 0) return [];
 
@@ -72,7 +69,7 @@ function wordElsInRange(
 
 function selectionInfoFromWordEls(
   els: HTMLElement[],
-  cutOutIds: Set<number>
+  cutOutIds: Set<number>,
 ): TranscriptSelectionInfo | null {
   if (els.length === 0) return null;
 
@@ -116,7 +113,7 @@ export function useTranscriptSelection({
   const setSelectedWords = useEditorStore((s) => s.setSelectedWords);
 
   const [selection, setSelection] = useState<TranscriptSelectionInfo | null>(
-    null
+    null,
   );
 
   const markedRef = useRef<Set<HTMLElement>>(new Set());
@@ -135,20 +132,17 @@ export function useTranscriptSelection({
     markedRef.current.clear();
   }, []);
 
-  const applyMarks = useCallback(
-    (els: HTMLElement[]) => {
-      const marked = new Set<HTMLElement>();
-      for (const el of els) {
-        el.setAttribute("data-sel", "");
-        marked.add(el);
-      }
-      for (const el of markedRef.current) {
-        if (!marked.has(el)) el.removeAttribute("data-sel");
-      }
-      markedRef.current = marked;
-    },
-    []
-  );
+  const applyMarks = useCallback((els: HTMLElement[]) => {
+    const marked = new Set<HTMLElement>();
+    for (const el of els) {
+      el.setAttribute("data-sel", "");
+      marked.add(el);
+    }
+    for (const el of markedRef.current) {
+      if (!marked.has(el)) el.removeAttribute("data-sel");
+    }
+    markedRef.current = marked;
+  }, []);
 
   const syncToReact = useCallback(
     (info: TranscriptSelectionInfo | null) => {
@@ -157,7 +151,7 @@ export function useTranscriptSelection({
       const prev = useEditorStore.getState().selectedWordIds;
       if (!sameIds(prev, ids)) setSelectedWords(ids);
     },
-    [setSelectedWords]
+    [setSelectedWords],
   );
 
   const clearSelection = useCallback(() => {
@@ -176,7 +170,7 @@ export function useTranscriptSelection({
   }, []);
 
   const seekToWord = useCallback((word: Word) => {
-    useEditorStore.getState().seekTo(word.start + PLAYHEAD_EPSILON_S);
+    useEditorStore.getState().playFrom(word.start + PLAYHEAD_EPSILON_S);
   }, []);
 
   const handleWordClick = useCallback(
@@ -197,7 +191,7 @@ export function useTranscriptSelection({
       });
       setSelectedWords([word.id]);
     },
-    [seekToWord, applyMarks, containerRef, setSelectedWords]
+    [seekToWord, applyMarks, containerRef, setSelectedWords],
   );
 
   // Paint marks on selectionchange; commit to React only when the mouse is up.

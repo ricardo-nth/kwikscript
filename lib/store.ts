@@ -39,11 +39,7 @@ import {
 import { en } from "@/lib/i18n/messages/en";
 import { detectMediaKind, type MediaKind } from "./media";
 import { buildWaveformPeaks, type WaveformPeaks } from "./waveform";
-import {
-  deleteProject,
-  fileFromProject,
-  getProject,
-} from "./projects";
+import { deleteProject, fileFromProject, getProject } from "./projects";
 import {
   addSpeaker as addSpeakerEntry,
   findSpeakerByName,
@@ -54,6 +50,7 @@ import {
   replaceSpeaker as replaceSpeakerEntry,
   speakersFromWords,
 } from "./speakers";
+import { seekAndPlayMedia } from "./playback";
 import { addSilenceCuts, removeOwnedSilenceCuts } from "./silences";
 
 interface PendingTranscript {
@@ -112,10 +109,12 @@ interface EditorState {
   // Transcript / edits
   words: Word[];
   /**
-   * Quiet ranges matching the current silence controls. Preview-only: these
-   * remain playable and are never saved, exported, or included in undo.
+   * Transcript-led pause candidates. Preview-only: these remain playable and
+   * are never saved, exported, or included in undo.
    */
   silencePreviewRanges: TimeRange[];
+  /** Waveform-led quiet-audio candidates, kept separate for distinct preview styling. */
+  quietAudioPreviewRanges: TimeRange[];
   /** Named speakers in the project (ids match Word.speaker). */
   speakers: SpeakerInfo[];
   manualCuts: ManualCut[];
@@ -156,7 +155,7 @@ interface EditorState {
   /** Load media for editing. Pass `words` to skip Whisper and use that transcript. */
   loadVideo: (
     file: File,
-    options?: { words?: Word[]; speakers?: SpeakerInfo[] }
+    options?: { words?: Word[]; speakers?: SpeakerInfo[] },
   ) => void;
   /** Restore a saved project from IndexedDB (no re-transcription). */
   openProject: (id: string) => Promise<void>;
@@ -183,6 +182,7 @@ interface EditorState {
    */
   importWords: (words: Word[], speakers?: SpeakerInfo[]) => void;
   setSilencePreviewRanges: (ranges: TimeRange[]) => void;
+  setQuietAudioPreviewRanges: (ranges: TimeRange[]) => void;
   /** Rename a speaker everywhere it appears. */
   renameSpeaker: (id: number, name: string) => void;
   /** Create a new speaker; returns its id (or -1 if unchanged). */
@@ -196,7 +196,7 @@ interface EditorState {
   changeTurnSpeaker: (
     wordIds: number[],
     toSpeaker: number | "new",
-    name?: string
+    name?: string,
   ) => void;
   /** Move a turn's start to `targetWordId` (boundary with the previous turn). */
   moveSpeakerLabel: (turnStartWordId: number, targetWordId: number) => void;
@@ -246,6 +246,8 @@ interface EditorState {
   toggleShowDeleted: () => void;
   setCurrentTime: (t: number) => void;
   seekTo: (t: number) => void;
+  /** Seek to original-media time and start playback (used by transcript words). */
+  playFrom: (t: number) => void;
   setPlaying: (p: boolean) => void;
   setVideoEl: (el: HTMLMediaElement | null) => void;
   /** Play/pause, skipping out of cut ranges and restarting from the start if parked at the end. */
@@ -272,9 +274,14 @@ function bumpAutosave() {
 const MAX_UNDO_STEPS = 100;
 
 /** Append to the undo stack, dropping the oldest entries past the cap. */
-function pushHistory(past: EditSnapshot[], entry: EditSnapshot): EditSnapshot[] {
+function pushHistory(
+  past: EditSnapshot[],
+  entry: EditSnapshot,
+): EditSnapshot[] {
   const next = [...past, entry];
-  return next.length > MAX_UNDO_STEPS ? next.slice(next.length - MAX_UNDO_STEPS) : next;
+  return next.length > MAX_UNDO_STEPS
+    ? next.slice(next.length - MAX_UNDO_STEPS)
+    : next;
 }
 
 function snapshotOf(s: {
@@ -310,7 +317,7 @@ function sameRanges(left: TimeRange[], right: TimeRange[]): boolean {
     left.every(
       (range, index) =>
         Math.abs(range.start - right[index]!.start) < 1e-4 &&
-        Math.abs(range.end - right[index]!.end) < 1e-4
+        Math.abs(range.end - right[index]!.end) < 1e-4,
     )
   );
 }
@@ -318,9 +325,7 @@ function sameRanges(left: TimeRange[], right: TimeRange[]): boolean {
 function pushEdit(
   get: () => EditorState,
   set: (
-    partial:
-      | Partial<EditorState>
-      | ((s: EditorState) => Partial<EditorState>)
+    partial: Partial<EditorState> | ((s: EditorState) => Partial<EditorState>),
   ) => void,
   next: Partial<
     Pick<
@@ -335,7 +340,7 @@ function pushEdit(
       | "nextManualCutId"
       | "nextBoundaryId"
     >
-  >
+  >,
 ) {
   const s = get();
   if (s.gestureActive) {
@@ -375,6 +380,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   words: [],
   silencePreviewRanges: [],
+  quietAudioPreviewRanges: [],
   speakers: [],
   manualCuts: [],
   sceneBoundaries: [],
@@ -430,6 +436,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       },
       words: imported ? imported : [],
       silencePreviewRanges: [],
+      quietAudioPreviewRanges: [],
       speakers,
       manualCuts: [],
       sceneBoundaries: [],
@@ -468,7 +475,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (record.mediaPath && window.rescriptDesktop) {
       const resolved = await window.rescriptDesktop.resolveMediaPath(
         record.mediaPath,
-        record.name
+        record.name,
       );
       if (!resolved) {
         throw new Error(en["error.projectSourceMissing"]);
@@ -514,6 +521,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       progress: { message: "", value: null },
       words: record.words,
       silencePreviewRanges: [],
+      quietAudioPreviewRanges: [],
       speakers,
       manualCuts,
       sceneBoundaries,
@@ -576,6 +584,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({
       words,
       silencePreviewRanges: [],
+      quietAudioPreviewRanges: [],
       speakers: speakersFromWords(words, speakers ?? []),
       manualCuts: [],
       sceneBoundaries: [],
@@ -590,11 +599,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   importWords: (words, speakers) => {
     if (words.length === 0) return;
     const { status } = get();
-    if (
-      status !== "ready" &&
-      status !== "error" &&
-      status !== "transcribing"
-    ) {
+    if (status !== "ready" && status !== "error" && status !== "transcribing") {
       return;
     }
     // Stop Whisper if it was still running.
@@ -602,6 +607,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({
       words,
       silencePreviewRanges: [],
+      quietAudioPreviewRanges: [],
       speakers: speakersFromWords(words, speakers ?? []),
       manualCuts: [],
       sceneBoundaries: [],
@@ -623,7 +629,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((state) =>
       sameRanges(state.silencePreviewRanges, silencePreviewRanges)
         ? state
-        : { silencePreviewRanges }
+        : { silencePreviewRanges },
+    ),
+  setQuietAudioPreviewRanges: (quietAudioPreviewRanges) =>
+    set((state) =>
+      sameRanges(state.quietAudioPreviewRanges, quietAudioPreviewRanges)
+        ? state
+        : { quietAudioPreviewRanges },
     ),
 
   renameSpeaker: (id, name) => {
@@ -668,10 +680,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (name && name.trim()) {
         speakers = renameSpeakerEntry(speakers, targetId, name);
       } else if (!speakers.some((sp) => sp.id === targetId)) {
-        speakers = speakersFromWords(
-          s.words,
-          [...speakers, { id: targetId, name: `Speaker ${targetId + 1}` }]
-        );
+        speakers = speakersFromWords(s.words, [
+          ...speakers,
+          { id: targetId, name: `Speaker ${targetId + 1}` },
+        ]);
       }
     }
     const words = reassignWords(s.words, wordIds, targetId);
@@ -715,7 +727,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const idSet = new Set(ids);
     pushEdit(get, set, {
       words: words.map((w) =>
-        idSet.has(w.id) && !w.deleted ? { ...w, deleted: true } : w
+        idSet.has(w.id) && !w.deleted ? { ...w, deleted: true } : w,
       ),
       selectedCutIndex: null,
     });
@@ -761,7 +773,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       s.words,
       s.manualCuts,
       ranges,
-      s.nextManualCutId
+      s.nextManualCutId,
     );
     if (!result) return;
     pushEdit(get, set, {
@@ -784,8 +796,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             cut.end - cut.start > 1e-4 &&
             !s.words.some(
               (word) =>
-                word.end > cut.start + 1e-4 && word.start < cut.end - 1e-4
-            )
+                word.end > cut.start + 1e-4 && word.start < cut.end - 1e-4,
+            ),
         )
         .map((cut) => ({ start: cut.start, end: cut.end }));
       get().restoreRanges(legacyRanges);
@@ -804,7 +816,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const cuts = getCutRanges(s.words, s.duration, s.manualCuts);
     const clips = getClipSegments(
       getKeepRanges(cuts, s.duration),
-      s.sceneBoundaries
+      s.sceneBoundaries,
     );
     const clip = clips.find((c) => c.index === s.selectedClipIndex);
     if (!clip || clip.end - clip.start <= 1e-4) return false;
@@ -836,14 +848,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         manualCuts,
         w.start,
         w.end,
-        nextManualCutId
+        nextManualCutId,
       );
       manualCuts = shrunk.cuts;
       nextManualCutId = shrunk.nextId;
     }
 
     const words = s.words.map((w) =>
-      idSet.has(w.id) ? { ...w, deleted: false } : w
+      idSet.has(w.id) ? { ...w, deleted: false } : w,
     );
 
     pushEdit(get, set, {
@@ -916,7 +928,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const id = s.nextBoundaryId;
     pushEdit(get, set, {
       sceneBoundaries: [...s.sceneBoundaries, { id, time: t }].sort(
-        (a, b) => a.time - b.time
+        (a, b) => a.time - b.time,
       ),
       nextBoundaryId: id + 1,
     });
@@ -941,7 +953,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       edge,
       from,
       to,
-      s.nextManualCutId
+      s.nextManualCutId,
     );
     if (!result) return;
 
@@ -954,13 +966,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const clips = getClipSegments(
       getKeepRanges(
         getCutRanges(result.words, s.duration, result.manualCuts),
-        s.duration
+        s.duration,
       ),
-      sceneBoundaries
+      sceneBoundaries,
     );
     const owner =
-      clips.find((c) => Math.abs((edge === "in" ? c.start : c.end) - to) < 1e-3) ??
-      clips.find((c) => to >= c.start && to <= c.end);
+      clips.find(
+        (c) => Math.abs((edge === "in" ? c.start : c.end) - to) < 1e-3,
+      ) ?? clips.find((c) => to >= c.start && to <= c.end);
 
     pushEdit(get, set, {
       words: result.words,
@@ -1025,10 +1038,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       manualCuts: prev.manualCuts,
       sceneBoundaries: prev.sceneBoundaries,
       past: past.slice(0, -1),
-      future: [
-        { words, speakers, manualCuts, sceneBoundaries },
-        ...future,
-      ],
+      future: [{ words, speakers, manualCuts, sceneBoundaries }, ...future],
       selectedClipIndex: null,
       selectedCutIndex: null,
       selectedWordIds: [],
@@ -1064,6 +1074,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   seekTo: (time) => {
     const media = get().videoEl;
     if (media) media.currentTime = time;
+    set({ currentTime: time });
+  },
+  playFrom: (time) => {
+    const media = get().videoEl;
+    if (media) void seekAndPlayMedia(media, time);
     set({ currentTime: time });
   },
   setPlaying: (playing) => set({ playing }),
@@ -1111,6 +1126,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       error: null,
       words: [],
       silencePreviewRanges: [],
+      quietAudioPreviewRanges: [],
       speakers: [],
       manualCuts: [],
       sceneBoundaries: [],
@@ -1149,6 +1165,7 @@ export function hydrateTranscriptLanguagePreference() {
 
 // DevTools / Playwright: inspect and drive the editor store from the console.
 if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-  (window as unknown as { __rescriptStore?: typeof useEditorStore }).__rescriptStore =
-    useEditorStore;
+  (
+    window as unknown as { __rescriptStore?: typeof useEditorStore }
+  ).__rescriptStore = useEditorStore;
 }

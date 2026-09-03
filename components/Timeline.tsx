@@ -37,6 +37,7 @@ import {
 } from "@/lib/edits";
 import type { ClipSegment, Word } from "@/lib/types";
 import { isDisfluencyPlaceholder } from "@/lib/disfluencies";
+import { findFillerWordIds } from "@/lib/fillers";
 import { VAD_SAMPLE_RATE } from "@/lib/vad";
 import { peakBetween } from "@/lib/waveform";
 import { useCutRanges } from "@/hooks/useCutRanges";
@@ -69,7 +70,7 @@ function roundRectPath(
   y: number,
   w: number,
   h: number,
-  r: number
+  r: number,
 ) {
   const radius = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath();
@@ -87,7 +88,13 @@ function roundRectPath(
 
 type DragKind =
   | { type: "seek" }
-  | { type: "word"; wordId: number; edge: "start" | "end"; origStart: number; origEnd: number }
+  | {
+      type: "word";
+      wordId: number;
+      edge: "start" | "end";
+      origStart: number;
+      origEnd: number;
+    }
   /**
    * `time` tracks where the dragged edge currently sits (mutated as the drag
    * moves); `lo`/`hi` bound it to this clip and the gap next to it, so an edge
@@ -100,6 +107,9 @@ export default function Timeline() {
   const waveform = useEditorStore((s) => s.waveform);
   const words = useEditorStore((s) => s.words);
   const silencePreviewRanges = useEditorStore((s) => s.silencePreviewRanges);
+  const quietAudioPreviewRanges = useEditorStore(
+    (s) => s.quietAudioPreviewRanges,
+  );
   const sceneBoundaries = useEditorStore((s) => s.sceneBoundaries);
   const duration = useEditorStore((s) => s.duration);
   const currentTime = useEditorStore((s) => s.currentTime);
@@ -110,19 +120,23 @@ export default function Timeline() {
   const status = useEditorStore((s) => s.status);
 
   const cuts = useCutRanges();
+  const fillerCandidateIds = useMemo(
+    () => new Set(findFillerWordIds(words)),
+    [words],
+  );
   const keeps = useMemo(() => getKeepRanges(cuts, duration), [cuts, duration]);
   const clips = useMemo(
     () => getClipSegments(keeps, sceneBoundaries),
-    [keeps, sceneBoundaries]
+    [keeps, sceneBoundaries],
   );
   const splitOk = useMemo(
     () => canSplitAt(currentTime, duration, cuts, sceneBoundaries),
-    [currentTime, duration, cuts, sceneBoundaries]
+    [currentTime, duration, cuts, sceneBoundaries],
   );
   /** Splits that divide two touching clips — the joinable ones. */
   const splits = useMemo(
     () => getActiveSceneBoundaries(sceneBoundaries, keeps),
-    [sceneBoundaries, keeps]
+    [sceneBoundaries, keeps],
   );
 
   const outerRef = useRef<HTMLDivElement>(null);
@@ -217,7 +231,9 @@ export default function Timeline() {
     ctx.fillStyle = dark ? "#71717a" : "#a1a1aa";
     ctx.font = "9px ui-sans-serif, system-ui";
     ctx.textBaseline = "top";
-    const step = TICK_STEPS.find((s) => s * pps >= 70) ?? TICK_STEPS[TICK_STEPS.length - 1];
+    const step =
+      TICK_STEPS.find((s) => s * pps >= 70) ??
+      TICK_STEPS[TICK_STEPS.length - 1];
     const firstTick = Math.floor(scrollLeft / pps / step) * step;
     for (let t = firstTick; t <= (scrollLeft + width) / pps + step; t += step) {
       const x = t * pps - scrollLeft;
@@ -251,7 +267,9 @@ export default function Timeline() {
       const selected = clip.index === selectedClipIndex;
       const hovered = clip.index === hoveredClipIndex && !selected;
       if (selected) {
-        ctx.fillStyle = dark ? "rgba(99, 102, 241, 0.20)" : "rgba(99, 102, 241, 0.10)";
+        ctx.fillStyle = dark
+          ? "rgba(99, 102, 241, 0.20)"
+          : "rgba(99, 102, 241, 0.10)";
         // Match the selection ring box (vertically inset, rounded).
         roundRectPath(
           ctx,
@@ -259,31 +277,63 @@ export default function Timeline() {
           trackTop + SELECTION_INSET,
           x1 - x0,
           trackH - SELECTION_INSET * 2,
-          SELECTION_RADIUS
+          SELECTION_RADIUS,
         );
         ctx.fill();
       } else if (hovered) {
-        ctx.fillStyle = dark ? "rgba(99, 102, 241, 0.10)" : "rgba(99, 102, 241, 0.05)";
+        ctx.fillStyle = dark
+          ? "rgba(99, 102, 241, 0.10)"
+          : "rgba(99, 102, 241, 0.05)";
         ctx.fillRect(x0, trackTop, x1 - x0, trackH);
       }
     }
 
-    // Candidate silences remain playable. Amber distinguishes this preview
-    // state from committed red cuts without making the ranges selectable.
+    // Waveform-led candidates remain playable. A cool gray wash and vertical
+    // dotted rule distinguish them from transcript-led amber pause previews.
+    for (const preview of quietAudioPreviewRanges) {
+      const x0 = preview.start * pps - scrollLeft;
+      const x1 = preview.end * pps - scrollLeft;
+      if (x1 < 0 || x0 > width) continue;
+      const fillW = x1 - x0;
+      ctx.fillStyle = dark
+        ? "rgba(100, 116, 139, 0.24)"
+        : "rgba(226, 232, 240, 0.78)";
+      ctx.fillRect(x0, trackTop, fillW, trackH);
+      ctx.strokeStyle = dark
+        ? "rgba(203, 213, 225, 0.38)"
+        : "rgba(100, 116, 139, 0.42)";
+      ctx.setLineDash([2, 3]);
+      for (let x = x0 + 3; x < x1; x += 8) {
+        ctx.beginPath();
+        ctx.moveTo(x, trackTop);
+        ctx.lineTo(x, trackTop + trackH);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+
+    // Transcript-led candidate pauses remain playable. Amber distinguishes
+    // this preview state from committed red cuts without making it selectable.
     for (const preview of silencePreviewRanges) {
       const x0 = preview.start * pps - scrollLeft;
       const x1 = preview.end * pps - scrollLeft;
       if (x1 < 0 || x0 > width) continue;
       const fillW = x1 - x0;
-      ctx.fillStyle = dark ? "rgba(180, 83, 9, 0.28)" : "rgba(254, 243, 199, 0.82)";
+      ctx.fillStyle = dark
+        ? "rgba(180, 83, 9, 0.28)"
+        : "rgba(254, 243, 199, 0.82)";
       ctx.fillRect(x0, trackTop, fillW, trackH);
-      ctx.fillStyle = dark ? "rgba(251, 191, 36, 0.72)" : "rgba(245, 158, 11, 0.68)";
+      ctx.fillStyle = dark
+        ? "rgba(251, 191, 36, 0.72)"
+        : "rgba(245, 158, 11, 0.68)";
       ctx.fillRect(x0, RULER_H + WORDBAR_H - 3, fillW, 3);
       ctx.save();
       ctx.beginPath();
       ctx.rect(x0, trackTop, fillW, trackH);
       ctx.clip();
-      ctx.strokeStyle = dark ? "rgba(251, 191, 36, 0.35)" : "rgba(245, 158, 11, 0.28)";
+      ctx.strokeStyle = dark
+        ? "rgba(251, 191, 36, 0.35)"
+        : "rgba(245, 158, 11, 0.28)";
       ctx.lineWidth = 1;
       for (let x = x0 - trackH; x < x0 + fillW + trackH; x += 7) {
         ctx.beginPath();
@@ -361,9 +411,20 @@ export default function Timeline() {
       const peak = peakBetween(waveform, i0, Math.floor(i0 + samplesPerPx) + 1);
       const inCut = cuts.some((c) => t >= c.start && t < c.end);
       const inPreview = silencePreviewRanges.some(
-        (range) => t >= range.start && t < range.end
+        (range) => t >= range.start && t < range.end,
       );
-      ctx.fillStyle = inCut ? "#fca5a5" : inPreview ? "#fbbf24" : "#818cf8";
+      const inQuietPreview = quietAudioPreviewRanges.some(
+        (range) => t >= range.start && t < range.end,
+      );
+      ctx.fillStyle = inCut
+        ? "#fca5a5"
+        : inPreview
+          ? "#fbbf24"
+          : inQuietPreview
+            ? dark
+              ? "#94a3b8"
+              : "#64748b"
+            : "#818cf8";
       const h = Math.max(1, peak * trackH * WAVE_LANE_FILL);
       ctx.fillRect(x, midY - h / 2, 1, h);
     }
@@ -371,6 +432,7 @@ export default function Timeline() {
     waveform,
     cuts,
     silencePreviewRanges,
+    quietAudioPreviewRanges,
     clips,
     duration,
     pps,
@@ -423,7 +485,7 @@ export default function Timeline() {
       const tAnchor = (el.scrollLeft + pointerX) / curPps;
       const nextZoom = Math.min(
         MAX_ZOOM,
-        Math.max(MIN_ZOOM, curZoom * Math.exp(-e.deltaY * ZOOM_SPEED))
+        Math.max(MIN_ZOOM, curZoom * Math.exp(-e.deltaY * ZOOM_SPEED)),
       );
       if (nextZoom === curZoom) return;
       const fit =
@@ -454,10 +516,10 @@ export default function Timeline() {
       const rect = el.getBoundingClientRect();
       return Math.min(
         Math.max(0, (clientX - rect.left + el.scrollLeft) / pps),
-        duration
+        duration,
       );
     },
-    [pps, duration]
+    [pps, duration],
   );
 
   const seekTo = useCallback((t: number) => {
@@ -493,7 +555,7 @@ export default function Timeline() {
         const cutIdx = cuts.findIndex((c) => t >= c.start && t < c.end);
         setHoveredCutIndex(cutIdx >= 0 ? cutIdx : null);
         const split = splits.find(
-          (b) => Math.abs(t - b.time) * pps <= SPLIT_HOVER_PX
+          (b) => Math.abs(t - b.time) * pps <= SPLIT_HOVER_PX,
         );
         setHoveredSplitId(split?.id ?? null);
         return;
@@ -521,7 +583,7 @@ export default function Timeline() {
         return;
       }
     },
-    [clips, cuts, pps, seekTo, splits, timeFromClientX]
+    [clips, cuts, pps, seekTo, splits, timeFromClientX],
   );
 
   const onPointerLeave = useCallback(() => {
@@ -531,11 +593,14 @@ export default function Timeline() {
     setHoveredSplitId(null);
   }, []);
 
-  const joinAtSplit = useCallback((e: ReactPointerEvent | React.MouseEvent, id: number) => {
-    e.stopPropagation();
-    useEditorStore.getState().removeSceneBoundary(id);
-    setHoveredSplitId(null);
-  }, []);
+  const joinAtSplit = useCallback(
+    (e: ReactPointerEvent | React.MouseEvent, id: number) => {
+      e.stopPropagation();
+      useEditorStore.getState().removeSceneBoundary(id);
+      setHoveredSplitId(null);
+    },
+    [],
+  );
 
   const onBackgroundPointerDown = useCallback(
     (e: ReactPointerEvent) => {
@@ -561,7 +626,7 @@ export default function Timeline() {
       e.currentTarget.setPointerCapture(e.pointerId);
       seekTo(t);
     },
-    [clips, cuts, seekTo, timeFromClientX]
+    [clips, cuts, seekTo, timeFromClientX],
   );
 
   const startWordDrag = useCallback(
@@ -579,7 +644,7 @@ export default function Timeline() {
       };
       setDragging(true);
     },
-    []
+    [],
   );
 
   const startTrimDrag = useCallback(
@@ -604,12 +669,12 @@ export default function Timeline() {
       };
       setDragging(true);
     },
-    [cuts]
+    [cuts],
   );
 
   const editedDuration = useMemo(
     () => getEditedDuration(cuts, duration),
-    [cuts, duration]
+    [cuts, duration],
   );
   const trimmed = duration - editedDuration;
 
@@ -620,7 +685,10 @@ export default function Timeline() {
   const skip = useCallback((delta: number) => {
     const { videoEl, setCurrentTime } = useEditorStore.getState();
     if (!videoEl) return;
-    const t = Math.min(Math.max(0, videoEl.currentTime + delta), videoEl.duration);
+    const t = Math.min(
+      Math.max(0, videoEl.currentTime + delta),
+      videoEl.duration,
+    );
     videoEl.currentTime = t;
     setCurrentTime(t);
   }, []);
@@ -643,7 +711,10 @@ export default function Timeline() {
         <div className="order-1 flex h-9 min-w-0 flex-1 items-center gap-2 sm:h-auto">
           <span className="shrink-0 text-[11px] font-mono tabular-nums leading-none text-zinc-900 dark:text-zinc-100">
             {formatTime(originalToEdited(currentTime, cuts))}
-            <span className="text-zinc-400 dark:text-zinc-500"> / {formatTime(editedDuration)}</span>
+            <span className="text-zinc-400 dark:text-zinc-500">
+              {" "}
+              / {formatTime(editedDuration)}
+            </span>
           </span>
           {trimmed > 0.01 && (
             <span
@@ -700,9 +771,7 @@ export default function Timeline() {
               useEditorStore.getState().splitAtPlayhead();
             }}
             title={
-              splitOk
-                ? t("timeline.splitTitle")
-                : t("timeline.splitDisabled")
+              splitOk ? t("timeline.splitTitle") : t("timeline.splitDisabled")
             }
             className={`flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition ${
               ready && splitOk
@@ -833,7 +902,10 @@ export default function Timeline() {
           ref={scrollRef}
           onScroll={(e) => {
             const next = e.currentTarget.scrollLeft;
-            if (autoScrollRef.current == null || Math.abs(next - autoScrollRef.current) > 1)
+            if (
+              autoScrollRef.current == null ||
+              Math.abs(next - autoScrollRef.current) > 1
+            )
               userScrolledRef.current = true;
             autoScrollRef.current = null;
             setScrollLeft(next);
@@ -841,7 +913,7 @@ export default function Timeline() {
           onPointerDown={onBackgroundPointerDown}
           onPointerMove={onPointerMove}
           onPointerLeave={onPointerLeave}
-          className="scrollbar-thin absolute inset-0 touch-none overflow-x-auto overflow-y-hidden select-none"
+          className="absolute inset-0 touch-none overflow-x-auto overflow-y-hidden select-none"
           style={{ cursor: dragging ? "col-resize" : "default" }}
         >
           <div className="relative h-full" style={{ width: totalWidth }}>
@@ -852,7 +924,12 @@ export default function Timeline() {
                 <div
                   key={`split-${b.id}`}
                   className="pointer-events-none absolute z-[8] flex -translate-x-1/2 justify-center items-center"
-                  style={{ left: b.time * pps, top: RULER_H + WORDBAR_H + 4, bottom: 0, width: 18 }}
+                  style={{
+                    left: b.time * pps,
+                    top: RULER_H + WORDBAR_H + 4,
+                    bottom: 0,
+                    width: 18,
+                  }}
                 >
                   {hovered && (
                     <button
@@ -879,7 +956,9 @@ export default function Timeline() {
                   left: cuts[selectedCutIndex].start * pps,
                   width: Math.max(
                     2,
-                    (cuts[selectedCutIndex].end - cuts[selectedCutIndex].start) * pps
+                    (cuts[selectedCutIndex].end -
+                      cuts[selectedCutIndex].start) *
+                      pps,
                   ),
                   top: RULER_H + WORDBAR_H + SELECTION_INSET,
                   bottom: SELECTION_INSET,
@@ -890,7 +969,8 @@ export default function Timeline() {
             {/* Clip trim handles (selected or hovered) */}
             {clips.map((clip) => {
               const active =
-                clip.index === selectedClipIndex || clip.index === hoveredClipIndex;
+                clip.index === selectedClipIndex ||
+                clip.index === hoveredClipIndex;
               if (!active) return null;
               const selected = clip.index === selectedClipIndex;
               return (
@@ -957,6 +1037,7 @@ export default function Timeline() {
               const cutOut = isWordCutOut(w, cuts);
               const wordSelected = selectedWordIds.includes(w.id);
               const placeholder = isDisfluencyPlaceholder(w.text);
+              const fillerCandidate = fillerCandidateIds.has(w.id);
               const showWordHandles = showHandles && (hovered || wWidth > 28);
               return (
                 <div
@@ -967,7 +1048,7 @@ export default function Timeline() {
                       ? "border-red-200/90 bg-red-50/95 text-red-400 line-through dark:border-red-900/90 dark:bg-red-950/60 dark:text-red-400"
                       : wordSelected
                         ? "border-indigo-300 bg-indigo-100/70 text-zinc-800 dark:border-indigo-500/60 dark:bg-indigo-950/50 dark:text-zinc-100"
-                        : placeholder
+                        : placeholder || fillerCandidate
                           ? hovered
                             ? "border-amber-300/90 bg-amber-50 text-amber-800 shadow-sm shadow-amber-500/10 dark:border-amber-700/80 dark:bg-amber-950/50 dark:text-amber-300"
                             : "border-amber-200/90 bg-amber-50/90 text-amber-700/90 dark:border-amber-800/80 dark:bg-amber-950/40 dark:text-amber-400/90"
@@ -982,7 +1063,7 @@ export default function Timeline() {
                     height: WORDBAR_H - 10,
                   }}
                   title={
-                    placeholder
+                    placeholder || fillerCandidate
                       ? showHandles
                         ? t("timeline.hesitationAdjust")
                         : t("timeline.hesitationCut")
@@ -1005,12 +1086,15 @@ export default function Timeline() {
                     // Delete / Restore can bring them back.
                     store.setSelectedWords([w.id]);
                     if (cutOut) {
-                      const cut = cutRangeAt(w.start + (w.end - w.start) / 2, cuts);
+                      const cut = cutRangeAt(
+                        w.start + (w.end - w.start) / 2,
+                        cuts,
+                      );
                       const cutIdx = cut
                         ? cuts.findIndex(
                             (c) =>
                               Math.abs(c.start - cut.start) < 1e-4 &&
-                              Math.abs(c.end - cut.end) < 1e-4
+                              Math.abs(c.end - cut.end) < 1e-4,
                           )
                         : -1;
                       if (cutIdx >= 0) store.setSelectedCutIndex(cutIdx);
@@ -1020,7 +1104,7 @@ export default function Timeline() {
                       }
                     } else {
                       const clip = clips.find(
-                        (c) => w.start >= c.start && w.start < c.end
+                        (c) => w.start >= c.start && w.start < c.end,
                       );
                       store.setSelectedClipIndex(clip?.index ?? null);
                       store.setSelectedCutIndex(null);

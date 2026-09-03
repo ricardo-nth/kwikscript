@@ -63,7 +63,10 @@ function SettingSlider({
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+        <label
+          htmlFor={id}
+          className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300"
+        >
           {label}
         </label>
         <label className="flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500">
@@ -112,7 +115,9 @@ function SilenceSettingsPanel({
   tool: SilenceTool;
   panelId: string;
   preferences: SilencePreferences;
-  onPreferencesChange: (update: (current: SilencePreferences) => SilencePreferences) => void;
+  onPreferencesChange: (
+    update: (current: SilencePreferences) => SilencePreferences,
+  ) => void;
   rangeCount: number;
   hasRestorableCuts: boolean;
   onRestore: () => void;
@@ -136,7 +141,13 @@ function SilenceSettingsPanel({
     >
       <section className="px-3 py-3">
         <div className="mb-3 flex items-start gap-2.5">
-          <span className="mt-0.5 shrink-0 text-amber-500 dark:text-amber-400">
+          <span
+            className={`mt-0.5 shrink-0 ${
+              isQuiet
+                ? "text-slate-500 dark:text-slate-400"
+                : "text-amber-500 dark:text-amber-400"
+            }`}
+          >
             {isQuiet ? <AudioWaveform size={15} /> : <Pause size={15} />}
           </span>
           <div className="min-w-0 flex-1">
@@ -144,12 +155,22 @@ function SilenceSettingsPanel({
               <h2 className="text-[13px] font-medium text-zinc-800 dark:text-zinc-100">
                 {title}
               </h2>
-              <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
+                  isQuiet
+                    ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                    : "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
+                }`}
+              >
                 {rangeCount}
               </span>
             </div>
             <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
-              {t(isQuiet ? "tools.quietAudioCleanupHelp" : "tools.pauseCleanupHelp")}
+              {t(
+                isQuiet
+                  ? "tools.quietAudioCleanupHelp"
+                  : "tools.pauseCleanupHelp",
+              )}
             </p>
           </div>
         </div>
@@ -165,7 +186,9 @@ function SilenceSettingsPanel({
                 max={SILENCE_THRESHOLD_MAX}
                 step={SILENCE_THRESHOLD_STEP}
                 suffix=""
-                formatValue={(value) => value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}
+                formatValue={(value) =>
+                  value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")
+                }
                 onChange={(threshold) =>
                   onPreferencesChange((current) => ({ ...current, threshold }))
                 }
@@ -178,11 +201,19 @@ function SilenceSettingsPanel({
 
           <div>
             <p className="mb-1.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
-              {t(isQuiet ? "tools.quietDurationRange" : "tools.pauseDurationRange")}
+              {t(
+                isQuiet
+                  ? "tools.quietDurationRange"
+                  : "tools.pauseDurationRange",
+              )}
             </p>
             <div
               role="radiogroup"
-              aria-label={t(isQuiet ? "tools.quietDurationRange" : "tools.pauseDurationRange")}
+              aria-label={t(
+                isQuiet
+                  ? "tools.quietDurationRange"
+                  : "tools.pauseDurationRange",
+              )}
               className="mb-2.5 grid grid-cols-2 gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
             >
               {(["upTo", "between"] as const).map((durationMode) => {
@@ -194,7 +225,10 @@ function SilenceSettingsPanel({
                     role="radio"
                     aria-checked={selected}
                     onClick={() =>
-                      onPreferencesChange((current) => ({ ...current, durationMode }))
+                      onPreferencesChange((current) => ({
+                        ...current,
+                        durationMode,
+                      }))
                     }
                     className={`flex h-7 cursor-pointer items-center justify-center rounded-md px-2 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 ${
                       selected
@@ -202,7 +236,11 @@ function SilenceSettingsPanel({
                         : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
                     }`}
                   >
-                    {t(durationMode === "upTo" ? "tools.durationUpTo" : "tools.durationBetween")}
+                    {t(
+                      durationMode === "upTo"
+                        ? "tools.durationUpTo"
+                        : "tools.durationBetween",
+                    )}
                   </button>
                 );
               })}
@@ -216,7 +254,10 @@ function SilenceSettingsPanel({
                 max={SILENCE_MAX_DURATION_MAX}
                 step={SILENCE_MAX_DURATION_STEP}
                 onChange={(maxDuration) =>
-                  onPreferencesChange((current) => ({ ...current, maxDuration }))
+                  onPreferencesChange((current) => ({
+                    ...current,
+                    maxDuration,
+                  }))
                 }
               />
             ) : (
@@ -229,7 +270,10 @@ function SilenceSettingsPanel({
                   max={SILENCE_DURATION_MAX}
                   step={SILENCE_DURATION_STEP}
                   onChange={(minDuration) =>
-                    onPreferencesChange((current) => ({ ...current, minDuration }))
+                    onPreferencesChange((current) => ({
+                      ...current,
+                      minDuration,
+                    }))
                   }
                 />
                 <SettingSlider
@@ -240,7 +284,10 @@ function SilenceSettingsPanel({
                   max={SILENCE_MAX_DURATION_MAX}
                   step={SILENCE_MAX_DURATION_STEP}
                   onChange={(maxDuration) =>
-                    onPreferencesChange((current) => ({ ...current, maxDuration }))
+                    onPreferencesChange((current) => ({
+                      ...current,
+                      maxDuration,
+                    }))
                   }
                 />
               </div>
@@ -281,7 +328,9 @@ function SilenceSettingsPanel({
           </div>
         </div>
 
-        <div className={`mt-3 grid gap-2 ${hasRestorableCuts ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div
+          className={`mt-3 grid gap-2 ${hasRestorableCuts ? "grid-cols-2" : "grid-cols-1"}`}
+        >
           {hasRestorableCuts && (
             <button
               type="button"
@@ -300,10 +349,19 @@ function SilenceSettingsPanel({
           >
             {isQuiet ? <AudioWaveform size={13} /> : <Pause size={13} />}
             {rangeCount > 0
-              ? t(isQuiet ? "tools.removeDetectedQuietAudio" : "tools.removeDetectedPauses", {
-                  count: rangeCount,
-                })
-              : t(isQuiet ? "tools.noMatchingQuietAudio" : "tools.noMatchingPauses")}
+              ? t(
+                  isQuiet
+                    ? "tools.removeDetectedQuietAudio"
+                    : "tools.removeDetectedPauses",
+                  {
+                    count: rangeCount,
+                  },
+                )
+              : t(
+                  isQuiet
+                    ? "tools.noMatchingQuietAudio"
+                    : "tools.noMatchingPauses",
+                )}
           </button>
         </div>
       </section>
@@ -322,13 +380,19 @@ export default function TranscriptToolsMenu() {
   const restoreWords = useEditorStore((state) => state.restoreWords);
   const cutSilenceRanges = useEditorStore((state) => state.cutSilenceRanges);
   const restoreSilences = useEditorStore((state) => state.restoreSilences);
-  const setSilencePreviewRanges = useEditorStore((state) => state.setSilencePreviewRanges);
+  const setSilencePreviewRanges = useEditorStore(
+    (state) => state.setSilencePreviewRanges,
+  );
+  const setQuietAudioPreviewRanges = useEditorStore(
+    (state) => state.setQuietAudioPreviewRanges,
+  );
 
   const [openTool, setOpenTool] = useState<SilenceTool | null>(null);
   const [pausePreferences, setPausePreferences] =
     useState<SilencePreferences>(loadPausePreferences);
-  const [quietPreferences, setQuietPreferences] =
-    useState<SilencePreferences>(loadQuietAudioPreferences);
+  const [quietPreferences, setQuietPreferences] = useState<SilencePreferences>(
+    loadQuietAudioPreferences,
+  );
   const pausePanelId = useId();
   const quietPanelId = useId();
 
@@ -340,7 +404,7 @@ export default function TranscriptToolsMenu() {
         return next;
       });
     },
-    []
+    [],
   );
 
   const updateQuietPreferences = useCallback(
@@ -351,16 +415,16 @@ export default function TranscriptToolsMenu() {
         return next;
       });
     },
-    []
+    [],
   );
 
   const pauseBounds = useMemo(
     () => silenceDurationBounds(pausePreferences),
-    [pausePreferences]
+    [pausePreferences],
   );
   const quietBounds = useMemo(
     () => silenceDurationBounds(quietPreferences),
-    [quietPreferences]
+    [quietPreferences],
   );
 
   const pauseRanges = useMemo(
@@ -372,9 +436,9 @@ export default function TranscriptToolsMenu() {
         pauseBounds.minDuration,
         pausePreferences.padStart,
         pausePreferences.padEnd,
-        pauseBounds.maxDuration
+        pauseBounds.maxDuration,
       ),
-    [duration, manualCuts, pauseBounds, pausePreferences, words]
+    [duration, manualCuts, pauseBounds, pausePreferences, words],
   );
 
   const quietRanges = useMemo(
@@ -389,30 +453,48 @@ export default function TranscriptToolsMenu() {
             quietBounds.minDuration,
             quietPreferences.padStart,
             quietPreferences.padEnd,
-            quietBounds.maxDuration
+            quietBounds.maxDuration,
           )
         : [],
-    [duration, manualCuts, quietBounds, quietPreferences, waveform, words]
+    [duration, manualCuts, quietBounds, quietPreferences, waveform, words],
   );
 
   useEffect(() => {
-    setSilencePreviewRanges(
-      openTool === "pauses" ? pauseRanges : openTool === "quiet" ? quietRanges : []
-    );
-  }, [openTool, pauseRanges, quietRanges, setSilencePreviewRanges]);
+    setSilencePreviewRanges(pauseRanges);
+    setQuietAudioPreviewRanges(quietRanges);
+  }, [
+    pauseRanges,
+    quietRanges,
+    setQuietAudioPreviewRanges,
+    setSilencePreviewRanges,
+  ]);
 
-  useEffect(() => () => setSilencePreviewRanges([]), [setSilencePreviewRanges]);
+  useEffect(
+    () => () => {
+      setSilencePreviewRanges([]);
+      setQuietAudioPreviewRanges([]);
+    },
+    [setQuietAudioPreviewRanges, setSilencePreviewRanges],
+  );
 
   const fillerIds = useMemo(() => findFillerWordIds(words), [words]);
-  const deletedFillerIds = useMemo(() => findDeletedFillerWordIds(words), [words]);
-  const silenceCuts = useMemo(() => findSilenceCuts(words, manualCuts), [words, manualCuts]);
+  const deletedFillerIds = useMemo(
+    () => findDeletedFillerWordIds(words),
+    [words],
+  );
+  const silenceCuts = useMemo(
+    () => findSilenceCuts(words, manualCuts),
+    [words, manualCuts],
+  );
 
   const renderSilenceTool = (
     tool: SilenceTool,
     ranges: typeof pauseRanges,
     preferences: SilencePreferences,
-    updatePreferences: (update: (current: SilencePreferences) => SilencePreferences) => void,
-    panelId: string
+    updatePreferences: (
+      update: (current: SilencePreferences) => SilencePreferences,
+    ) => void,
+    panelId: string,
   ) => {
     const isQuiet = tool === "quiet";
     const bounds = isQuiet ? quietBounds : pauseBounds;
@@ -433,11 +515,18 @@ export default function TranscriptToolsMenu() {
               aria-expanded={isOpen}
               aria-controls={panelId}
               disabled={isQuiet && !waveform}
-              title={t(isQuiet ? "tools.removeQuietAudioTitle" : "tools.removePausesTitle", {
-                min: seconds(bounds.minDuration),
-                max: seconds(bounds.maxDuration),
-              })}
-              onClick={() => setOpenTool((current) => (current === tool ? null : tool))}
+              title={t(
+                isQuiet
+                  ? "tools.removeQuietAudioTitle"
+                  : "tools.removePausesTitle",
+                {
+                  min: seconds(bounds.minDuration),
+                  max: seconds(bounds.maxDuration),
+                },
+              )}
+              onClick={() =>
+                setOpenTool((current) => (current === tool ? null : tool))
+              }
               className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent dark:text-zinc-400 dark:hover:bg-zinc-800 dark:disabled:text-zinc-600"
             >
               {isQuiet ? <AudioWaveform size={14} /> : <Pause size={14} />}
@@ -445,7 +534,13 @@ export default function TranscriptToolsMenu() {
                 {t(isQuiet ? "tools.removeQuietAudio" : "tools.removePauses")}
               </span>
               {ranges.length > 0 && (
-                <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium tabular-nums ${
+                    isQuiet
+                      ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                      : "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
+                  }`}
+                >
                   {ranges.length}
                 </span>
               )}
@@ -479,7 +574,9 @@ export default function TranscriptToolsMenu() {
           className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
         >
           <Undo2 size={14} />
-          <span className="hidden min-[560px]:inline">{t("tools.restoreFillers")}</span>
+          <span className="hidden min-[560px]:inline">
+            {t("tools.restoreFillers")}
+          </span>
           <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
             {deletedFillerIds.length}
           </span>
@@ -493,9 +590,11 @@ export default function TranscriptToolsMenu() {
           className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs text-zinc-500 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent dark:text-zinc-400 dark:hover:bg-zinc-800 dark:disabled:text-zinc-600"
         >
           <WandSparkles size={14} />
-          <span className="hidden min-[560px]:inline">{t("tools.removeFillers")}</span>
+          <span className="hidden min-[560px]:inline">
+            {t("tools.removeFillers")}
+          </span>
           {fillerIds.length > 0 && (
-            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
               {fillerIds.length}
             </span>
           )}
@@ -507,14 +606,14 @@ export default function TranscriptToolsMenu() {
         pauseRanges,
         pausePreferences,
         updatePausePreferences,
-        pausePanelId
+        pausePanelId,
       )}
       {renderSilenceTool(
         "quiet",
         quietRanges,
         quietPreferences,
         updateQuietPreferences,
-        quietPanelId
+        quietPanelId,
       )}
     </div>
   );

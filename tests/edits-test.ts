@@ -29,7 +29,7 @@ function word(
   text: string,
   start: number,
   end: number,
-  deleted = false
+  deleted = false,
 ): Word {
   return { id, text, start, end, speaker: 0, deleted };
 }
@@ -52,10 +52,51 @@ function nearly(a: number, b: number, eps = 1e-3) {
 
 // --- Manual cuts merge with word cuts ---
 {
-  const words = [word(1, "a", 0, 1), word(2, "b", 1, 2, true), word(3, "c", 2, 3)];
+  const words = [
+    word(1, "a", 0, 1),
+    word(2, "b", 1, 2, true),
+    word(3, "c", 2, 3),
+  ];
   const manual: ManualCut[] = [{ id: 1, start: 2.5, end: 2.7 }];
   const cuts = getCutRanges(words, 3, manual);
   assert(cuts.length === 2, `expected 2 cuts, got ${cuts.length}`);
+}
+
+// --- Silence cuts must not bridge short pieces of kept audio ---
+{
+  const words = [word(1, "kept", 0.2, 0.3)];
+  const silenceCuts: ManualCut[] = [
+    { id: 1, start: 0, end: 0.2, source: "silence" },
+    { id: 2, start: 0.3, end: 0.5, source: "silence" },
+  ];
+  const cuts = getCutRanges(words, 0.5, silenceCuts);
+  const keeps = getKeepRanges(cuts, 0.5);
+  assert(
+    cuts.length === 2,
+    `kept speech must separate silence cuts, got ${cuts.length}`,
+  );
+  assert(
+    keeps.length === 1,
+    `expected one kept speech range, got ${keeps.length}`,
+  );
+  assert(
+    nearly(keeps[0].start, 0.2) && nearly(keeps[0].end, 0.3),
+    `kept speech was swallowed: ${JSON.stringify(keeps)}`,
+  );
+}
+
+// --- Deleted fillers must not bridge a short kept word ---
+{
+  const words = [
+    word(1, "um", 0, 0.15, true),
+    word(2, "I", 0.2, 0.3),
+    word(3, "uh", 0.35, 0.5, true),
+  ];
+  const cuts = getWordCutRanges(words, 0.5);
+  assert(
+    cuts.length === 2,
+    `kept word must separate deleted fillers, got ${cuts.length}`,
+  );
 }
 
 // --- Adjusting uh start away from hello ---
@@ -79,7 +120,10 @@ function nearly(a: number, b: number, eps = 1e-3) {
   const boundaries: SceneBoundary[] = [{ id: 1, time: 1.5 }];
   const clips = getClipSegments(keeps, boundaries);
   assert(clips.length === 2, `expected 2 clips, got ${clips.length}`);
-  assert(nearly(clips[0].end, 1.5) && nearly(clips[1].start, 1.5), "split at 1.5");
+  assert(
+    nearly(clips[0].end, 1.5) && nearly(clips[1].start, 1.5),
+    "split at 1.5",
+  );
 }
 
 // --- canSplitAt rejects cuts ---
@@ -97,8 +141,9 @@ function nearly(a: number, b: number, eps = 1e-3) {
   assert(result !== null, "trim ok");
   assert(result!.manualCuts.length === 1, "one manual cut");
   assert(
-    nearly(result!.manualCuts[0].start, 0) && nearly(result!.manualCuts[0].end, 1),
-    "cut [0,1)"
+    nearly(result!.manualCuts[0].start, 0) &&
+      nearly(result!.manualCuts[0].end, 1),
+    "cut [0,1)",
   );
 }
 
@@ -132,17 +177,27 @@ function nearly(a: number, b: number, eps = 1e-3) {
 
 // --- A trim edge may close the gap beside it, but not cross the next clip ---
 {
-  const words = [word(1, "a", 0, 5), word(2, "b", 5, 10, true), word(3, "c", 10, 20)];
+  const words = [
+    word(1, "a", 0, 5),
+    word(2, "b", 5, 10, true),
+    word(3, "c", 10, 20),
+  ];
   const cuts = getCutRanges(words, 20, []);
   const clips = getClipSegments(getKeepRanges(cuts, 20), []);
   assert(clips.length === 2, `two clips, got ${clips.length}`);
 
   const out = trimEdgeBounds(clips[0], "out", cuts);
-  assert(nearly(out.hi, clips[1].start), "out edge stops at the next clip's start");
+  assert(
+    nearly(out.hi, clips[1].start),
+    "out edge stops at the next clip's start",
+  );
   assert(nearly(out.lo, clips[0].start + MIN_CLIP_DURATION), "out edge floor");
 
   const inb = trimEdgeBounds(clips[1], "in", cuts);
-  assert(nearly(inb.lo, clips[0].end), "in edge stops at the previous clip's end");
+  assert(
+    nearly(inb.lo, clips[0].end),
+    "in edge stops at the previous clip's end",
+  );
   assert(nearly(inb.hi, clips[1].end - MIN_CLIP_DURATION), "in edge ceiling");
 }
 
@@ -152,20 +207,33 @@ function nearly(a: number, b: number, eps = 1e-3) {
   const cuts = getCutRanges(words, 3, []);
   const clips = getClipSegments(getKeepRanges(cuts, 3), [{ id: 1, time: 1.5 }]);
   assert(clips.length === 2, "split into two adjacent clips");
-  assert(nearly(trimEdgeBounds(clips[0], "out", cuts).hi, clips[0].end), "no gap to reclaim");
-  assert(nearly(trimEdgeBounds(clips[1], "in", cuts).lo, clips[1].start), "no gap to reclaim");
+  assert(
+    nearly(trimEdgeBounds(clips[0], "out", cuts).hi, clips[0].end),
+    "no gap to reclaim",
+  );
+  assert(
+    nearly(trimEdgeBounds(clips[1], "in", cuts).lo, clips[1].start),
+    "no gap to reclaim",
+  );
 }
 
 // --- Closing a gap merges the two keep ranges (no leftover cut) ---
 {
-  const words = [word(1, "a", 0, 5), word(2, "b", 5, 10, true), word(3, "c", 10, 20)];
+  const words = [
+    word(1, "a", 0, 5),
+    word(2, "b", 5, 10, true),
+    word(3, "c", 10, 20),
+  ];
   const cuts = getCutRanges(words, 20, []);
   const clips = getClipSegments(getKeepRanges(cuts, 20), []);
   const { hi } = trimEdgeBounds(clips[0], "out", cuts);
   const result = trimEdgeResult(words, [], "out", clips[0].end, hi, 1);
   assert(result !== null, "reclaim ok");
   assert(result!.words[1].deleted === false, "b restored");
-  const merged = getKeepRanges(getCutRanges(result!.words, 20, result!.manualCuts), 20);
+  const merged = getKeepRanges(
+    getCutRanges(result!.words, 20, result!.manualCuts),
+    20,
+  );
   assert(merged.length === 1, `keeps merged into one, got ${merged.length}`);
 }
 
@@ -174,16 +242,43 @@ function nearly(a: number, b: number, eps = 1e-3) {
   const words = [word(1, "a", 0, 4), word(2, "b", 4, 5)];
   let state = { words, manualCuts: [] as ManualCut[], nextCutId: 1 };
   // Shrink 5 -> 4.5 -> 4.2 in steps, the way a drag applies deltas.
-  for (const [from, to] of [[5, 4.5], [4.5, 4.2]] as const) {
-    const r = trimEdgeResult(state.words, state.manualCuts, "out", from, to, state.nextCutId);
-    state = { words: r!.words, manualCuts: r!.manualCuts, nextCutId: r!.nextCutId };
+  for (const [from, to] of [
+    [5, 4.5],
+    [4.5, 4.2],
+  ] as const) {
+    const r = trimEdgeResult(
+      state.words,
+      state.manualCuts,
+      "out",
+      from,
+      to,
+      state.nextCutId,
+    );
+    state = {
+      words: r!.words,
+      manualCuts: r!.manualCuts,
+      nextCutId: r!.nextCutId,
+    };
   }
   assert(state.manualCuts.length === 1, "steps merge into one cut");
-  assert(nearly(state.manualCuts[0].start, 4.2), "cut starts where the drag stopped");
+  assert(
+    nearly(state.manualCuts[0].start, 4.2),
+    "cut starts where the drag stopped",
+  );
   // Drag back to where it started.
-  const back = trimEdgeResult(state.words, state.manualCuts, "out", 4.2, 5, state.nextCutId);
+  const back = trimEdgeResult(
+    state.words,
+    state.manualCuts,
+    "out",
+    4.2,
+    5,
+    state.nextCutId,
+  );
   assert(back!.manualCuts.length === 0, "no leftover cut after returning");
-  assert(back!.words.every((w) => !w.deleted), "no words left deleted");
+  assert(
+    back!.words.every((w) => !w.deleted),
+    "no words left deleted",
+  );
 }
 
 // --- Split, pull the second clip away, then close the gap from the first ---
@@ -200,10 +295,17 @@ function nearly(a: number, b: number, eps = 1e-3) {
   const clipsOf = (s: typeof st) =>
     getClipSegments(
       getKeepRanges(getCutRanges(s.words, duration, s.manualCuts), duration),
-      s.boundaries
+      s.boundaries,
     );
   const trim = (edge: "in" | "out", from: number, to: number) => {
-    const r = trimEdgeResult(st.words, st.manualCuts, edge, from, to, st.nextCutId);
+    const r = trimEdgeResult(
+      st.words,
+      st.manualCuts,
+      edge,
+      from,
+      to,
+      st.nextCutId,
+    );
     assert(r !== null, `trim ${edge} ${from}->${to}`);
     st = {
       words: r!.words,
@@ -232,17 +334,33 @@ function nearly(a: number, b: number, eps = 1e-3) {
   }
   assert(st.manualCuts.length === 0, "gap fully reclaimed");
   assert(nearly(clips[1].start, 10), "clip 2 untouched");
-  assert(st.words.every((w) => !w.deleted), "words restored");
+  assert(
+    st.words.every((w) => !w.deleted),
+    "words restored",
+  );
 }
 
 // --- Boundary carrying keeps a trim reversible ---
 {
   const boundaries: SceneBoundary[] = [{ id: 1, time: 8 }];
-  assert(nearly(carrySceneBoundaries(boundaries, 8, 10)[0].time, 10), "carried along");
-  assert(nearly(carrySceneBoundaries(boundaries, 5, 6)[0].time, 8), "unrelated edge");
   assert(
-    carrySceneBoundaries([{ id: 1, time: 8 }, { id: 2, time: 10 }], 8, 10).length === 1,
-    "collapsed duplicates"
+    nearly(carrySceneBoundaries(boundaries, 8, 10)[0].time, 10),
+    "carried along",
+  );
+  assert(
+    nearly(carrySceneBoundaries(boundaries, 5, 6)[0].time, 8),
+    "unrelated edge",
+  );
+  assert(
+    carrySceneBoundaries(
+      [
+        { id: 1, time: 8 },
+        { id: 2, time: 10 },
+      ],
+      8,
+      10,
+    ).length === 1,
+    "collapsed duplicates",
   );
 }
 
@@ -260,22 +378,31 @@ function nearly(a: number, b: number, eps = 1e-3) {
   // edge does not (the skipped region already separates them).
   const inside: SceneBoundary[] = [{ id: 1, time: 1 }];
   const onCutEdge: SceneBoundary[] = [{ id: 2, time: 2 }];
-  assert(getActiveSceneBoundaries(inside, keeps).length === 1, "split inside a clip");
-  assert(getActiveSceneBoundaries(onCutEdge, keeps).length === 0, "split on a cut edge");
+  assert(
+    getActiveSceneBoundaries(inside, keeps).length === 1,
+    "split inside a clip",
+  );
+  assert(
+    getActiveSceneBoundaries(onCutEdge, keeps).length === 0,
+    "split on a cut edge",
+  );
 
   // Anchoring: exactly in a gap, and mid-word snapping to the nearer side.
-  assert(mapSplitsToWords(words, inside).get(2)?.id === 1, "sits in front of 'b'");
+  assert(
+    mapSplitsToWords(words, inside).get(2)?.id === 1,
+    "sits in front of 'b'",
+  );
   assert(
     mapSplitsToWords(words, [{ id: 3, time: 1.2 }]).get(2)?.id === 3,
-    "early in 'b' snaps before it"
+    "early in 'b' snaps before it",
   );
   assert(
     mapSplitsToWords(words, [{ id: 4, time: 1.8 }]).get(3)?.id === 4,
-    "late in 'b' snaps after it"
+    "late in 'b' snaps after it",
   );
   assert(
     mapSplitsToWords(words, [{ id: 5, time: 3.9 }]).size === 0,
-    "split in trailing silence has no anchor word"
+    "split in trailing silence has no anchor word",
   );
 }
 
@@ -286,13 +413,19 @@ function nearly(a: number, b: number, eps = 1e-3) {
     word(2, "uh", 0.45, 0.7, true), // overlaps hello (ASR bleed)
     word(3, "everyone", 0.8, 1.2),
   ];
-  assert(nearly(getCutRanges(words, 2)[0].start, 0.45), "cut bleeds into hello");
+  assert(
+    nearly(getCutRanges(words, 2)[0].start, 0.45),
+    "cut bleeds into hello",
+  );
 
   // Pulling the deleted word's start off "hello" moves the cut edge too, so the
   // wordbar handles are the only thing needed to refine a cut.
   const next = applyWordBounds(words, 2, 0.55, 0.7, 2);
   assert(next !== null, "word bounds applied");
-  assert(nearly(getCutRanges(next!, 2)[0].start, 0.55), "cut start follows the word");
+  assert(
+    nearly(getCutRanges(next!, 2)[0].start, 0.55),
+    "cut start follows the word",
+  );
   assert(nearly(next![0].end, 0.55), "hello keeps its audio");
 }
 
@@ -312,7 +445,7 @@ function nearly(a: number, b: number, eps = 1e-3) {
   assert(result!.manualCuts.length === 0, "manual cut removed");
   const keeps = getKeepRanges(
     getCutRanges(result!.words, 4, result!.manualCuts),
-    4
+    4,
   );
   assert(keeps.length === 1, "one continuous keep after restore");
 }
@@ -337,11 +470,7 @@ function nearly(a: number, b: number, eps = 1e-3) {
 
 // --- Delete clip then restore that cut brings media back ---
 {
-  const words = [
-    word(1, "a", 0, 2),
-    word(2, "b", 2, 4),
-    word(3, "c", 4, 6),
-  ];
+  const words = [word(1, "a", 0, 2), word(2, "b", 2, 4), word(3, "c", 4, 6)];
   // Simulate deleting the middle clip [2,4) via a manual cut + covered words.
   const cut = trimEdgeResult(words, [], "out", 4, 2, 1);
   assert(cut !== null, "cut middle");
@@ -350,14 +479,14 @@ function nearly(a: number, b: number, eps = 1e-3) {
     cut!.words,
     cut!.manualCuts,
     [{ start: 2, end: 4 }],
-    cut!.nextCutId
+    cut!.nextCutId,
   );
   assert(restored !== null, "restore middle");
   assert(restored!.words[1].deleted === false, "b back");
   assert(
     getKeepRanges(getCutRanges(restored!.words, 6, restored!.manualCuts), 6)
       .length === 1,
-    "fully restored keep"
+    "fully restored keep",
   );
 }
 
