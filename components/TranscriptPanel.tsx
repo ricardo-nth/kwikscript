@@ -13,20 +13,22 @@ import {
   ArrowUp,
   ArrowUpFromLine,
   ChevronLast,
+  Check,
   Eye,
   EyeOff,
   Merge,
   Pencil,
   RotateCcw,
   Scissors,
+  Plus,
   VolumeOff,
   X,
 } from "lucide-react";
-import { FloatingPortal } from "@floating-ui/react";
 import { useEditorStore } from "@/lib/store";
 import { isDisfluencyPlaceholder } from "@/lib/disfluencies";
 import { findFillerWordIds } from "@/lib/fillers";
-import TranscriptToolsMenu from "./TranscriptToolsMenu";
+import { normalizeCustomFiller } from "@/lib/fillerPreferences";
+import { loadSpeakerDetectionPreference } from "@/lib/speakerPreferences";
 import { mapSilencePreviewsToWords } from "@/lib/silences";
 import {
   isTranscriptFile,
@@ -47,8 +49,8 @@ import {
 } from "@/lib/edits";
 import { useTranscriptSelection } from "@/hooks/useTranscriptSelection";
 import { useTranscriptPlayheadFollow } from "@/hooks/useTranscriptPlayheadFollow";
-import { useWordAnchorFloating } from "@/hooks/useWordAnchorFloating";
 import { useCutRanges } from "@/hooks/useCutRanges";
+import { useCustomFillers } from "@/hooks/useCustomFillers";
 import { findActiveWordId, groupWordsBySpeaker } from "@/lib/transcript";
 import { isTypingTarget } from "@/lib/keyboard";
 import { useI18n } from "./I18nProvider";
@@ -169,6 +171,11 @@ const SilencePreviewMarker = memo(function SilencePreviewMarker({
 
 export default function TranscriptPanel() {
   const { t } = useI18n();
+  const {
+    fillers: customFillers,
+    addFiller: addCustomFiller,
+    removeFiller: removeCustomFiller,
+  } = useCustomFillers();
   const words = useEditorStore((s) => s.words);
   const silencePreviewRanges = useEditorStore((s) => s.silencePreviewRanges);
   const quietAudioPreviewRanges = useEditorStore(
@@ -202,6 +209,10 @@ export default function TranscriptPanel() {
     return ids;
   }, [words, cuts]);
   const fillerCandidateIds = useMemo(
+    () => new Set(findFillerWordIds(words, customFillers)),
+    [words, customFillers],
+  );
+  const builtInFillerIds = useMemo(
     () => new Set(findFillerWordIds(words)),
     [words],
   );
@@ -253,6 +264,8 @@ export default function TranscriptPanel() {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const correctInputRef = useRef<HTMLInputElement>(null);
+  const [speakerDetectionEnabled] = useState(loadSpeakerDetectionPreference);
   const [correcting, setCorrecting] = useState<{ ids: number[] } | null>(null);
   const [correctText, setCorrectText] = useState("");
   const [assigningSpeaker, setAssigningSpeaker] = useState<{
@@ -300,23 +313,20 @@ export default function TranscriptPanel() {
   }, []);
 
   const toolbarOpen = !!(selection && !correcting && !assigningSpeaker);
-  const { setFloating: setToolbarFloating, floatingStyles: toolbarStyles } =
-    useWordAnchorFloating({
-      open: toolbarOpen,
-      wordIds: selection?.ids,
-      containerRef,
-      placement: "top",
-      offsetMain: 8,
-    });
-
-  const { setFloating: setCorrectFloating, floatingStyles: correctStyles } =
-    useWordAnchorFloating({
-      open: !!correcting,
-      wordIds: correcting?.ids,
-      containerRef,
-      placement: "top",
-      offsetMain: 12,
-    });
+  const selectionPhrase = useMemo(() => {
+    if (!selection) return "";
+    const ids = new Set(selection.ids);
+    return normalizeCustomFiller(
+      words
+        .filter((word) => ids.has(word.id))
+        .map((word) => word.text)
+        .join(" "),
+    );
+  }, [selection, words]);
+  const selectionIsCustomFiller =
+    selectionPhrase.length > 0 && customFillers.includes(selectionPhrase);
+  const selectionIsBuiltInFiller =
+    !!selection && selection.ids.every((id) => builtInFillerIds.has(id));
 
   const turns = useMemo(() => groupWordsBySpeaker(words), [words]);
   const showSpeakerLabels = useMemo(
@@ -378,9 +388,9 @@ export default function TranscriptPanel() {
 
   const closeCorrect = useCallback(() => {
     freezeSelectionRef.current = false;
-    clearMarks();
     setCorrecting(null);
-  }, [clearMarks]);
+    clearSelection();
+  }, [clearSelection]);
 
   const openSpeakerAssign = useCallback(() => {
     if (!selection) return;
@@ -402,16 +412,27 @@ export default function TranscriptPanel() {
     closeCorrect();
   }, [correcting, correctText, correctWords, closeCorrect]);
 
-  // Close the correction popover when clicking outside of it.
-  const popoverRef = useRef<HTMLDivElement>(null);
+  const toggleSelectionFiller = useCallback(() => {
+    if (!selectionPhrase) return;
+    if (selectionIsCustomFiller) removeCustomFiller(selectionPhrase);
+    else addCustomFiller(selectionPhrase);
+    clearSelection();
+  }, [
+    selectionPhrase,
+    selectionIsCustomFiller,
+    addCustomFiller,
+    removeCustomFiller,
+    clearSelection,
+  ]);
+
   useEffect(() => {
     if (!correcting) return;
-    const handler = (e: MouseEvent) => {
-      if (!popoverRef.current?.contains(e.target as Node)) closeCorrect();
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [correcting, closeCorrect]);
+    const frame = window.requestAnimationFrame(() => {
+      correctInputRef.current?.focus();
+      correctInputRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [correcting]);
 
   // Escape clears the transcript selection chrome. Delete / Backspace are handled
   // globally in Editor (cut words restore; kept words / clips delete).
@@ -432,13 +453,26 @@ export default function TranscriptPanel() {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "@" || e.metaKey || e.ctrlKey || e.altKey) return;
       if (isTypingTarget(e.target)) return;
-      if (!selection || assigningSpeaker || correcting) return;
+      if (
+        !speakerDetectionEnabled ||
+        !selection ||
+        assigningSpeaker ||
+        correcting
+      ) {
+        return;
+      }
       e.preventDefault();
       openSpeakerAssign();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [selection, assigningSpeaker, correcting, openSpeakerAssign]);
+  }, [
+    speakerDetectionEnabled,
+    selection,
+    assigningSpeaker,
+    correcting,
+    openSpeakerAssign,
+  ]);
 
   const busy = status === "preparing" || status === "transcribing";
 
@@ -448,11 +482,116 @@ export default function TranscriptPanel() {
     <section className="relative flex min-h-0 min-w-0 overflow-hidden flex-1 flex-col bg-white dark:bg-zinc-900">
       {/* Floats above the scroller rather than sticking inside it, so the
           rubber-band overscroll only carries the transcript, not the bar. */}
-      <div className="absolute inset-x-0 top-0 z-10 flex h-10 items-center gap-2 border-b border-zinc-100/80 bg-white/75 px-3 backdrop-blur-md sm:px-4 dark:border-zinc-800/80 dark:bg-zinc-900/75">
-        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-          {t("transcript.header")}
-        </span>
-        <div className="ml-auto flex items-center gap-2">
+      <div className="absolute inset-x-0 top-0 z-10 flex h-10 min-w-0 items-center gap-2 border-b border-zinc-100/80 bg-white/90 px-2 backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-900/90">
+        {correcting ? (
+          <form
+            noValidate
+            aria-label={t("transcript.correct")}
+            onSubmit={(event) => {
+              event.preventDefault();
+              applyCorrection();
+            }}
+            className="flex min-w-0 flex-1 items-center gap-1.5"
+          >
+            <Pencil size={13} className="shrink-0 text-zinc-400" />
+            <input
+              ref={correctInputRef}
+              value={correctText}
+              aria-label={t("transcript.correct")}
+              onChange={(event) => setCorrectText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  closeCorrect();
+                }
+              }}
+              className="h-7 min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 text-xs text-zinc-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-indigo-500"
+            />
+            <button
+              type="submit"
+              disabled={correctText.trim().length === 0}
+              title={t("transcript.applyCorrection")}
+              aria-label={t("transcript.applyCorrection")}
+              className="flex size-7 shrink-0 items-center justify-center rounded-md bg-zinc-900 text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              <Check size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={closeCorrect}
+              title={t("common.cancel")}
+              aria-label={t("common.cancel")}
+              className="flex size-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+              <X size={13} />
+            </button>
+          </form>
+        ) : toolbarOpen && selection ? (
+          <div
+            data-transcript-toolbar
+            aria-label={t("transcript.selectionActions")}
+            className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
+          >
+            {selection.anyKept && (
+              <button
+                type="button"
+                onClick={cutSelection}
+                className="flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-600 transition hover:bg-red-50 hover:text-red-600 dark:text-zinc-300 dark:hover:bg-red-950/50 dark:hover:text-red-400"
+              >
+                <Scissors size={12} />
+                {t("transcript.cut")}
+              </button>
+            )}
+            {selection.anyDeleted && (
+              <button
+                type="button"
+                onClick={restoreSelection}
+                className="flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-600 transition hover:bg-emerald-50 hover:text-emerald-600 dark:text-zinc-300 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-400"
+              >
+                <RotateCcw size={12} />
+                {t("common.restore")}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={openCorrect}
+              className="flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <Pencil size={12} />
+              {t("transcript.correct")}
+            </button>
+            {!selectionIsBuiltInFiller && (
+              <button
+                type="button"
+                onClick={toggleSelectionFiller}
+                className="flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-600 transition hover:bg-amber-50 hover:text-amber-700 dark:text-zinc-300 dark:hover:bg-amber-950/40 dark:hover:text-amber-300"
+              >
+                {selectionIsCustomFiller ? (
+                  <X size={12} />
+                ) : (
+                  <Plus size={12} />
+                )}
+                {t(
+                  selectionIsCustomFiller
+                    ? "transcript.unmarkFiller"
+                    : "transcript.markFiller",
+                )}
+              </button>
+            )}
+            {speakerDetectionEnabled && (
+              <SelectionSpeakerButton onClick={openSpeakerAssign} />
+            )}
+          </div>
+        ) : (
+          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            {t("transcript.header")}
+          </span>
+        )}
+
+        {!correcting && (
+          <div className="ml-auto flex shrink-0 items-center gap-1">
           {deletedCount > 0 && (
             <span className="rounded-md bg-red-50 px-2 py-0.5 text-[9px] font-medium text-red-600 line-clamp-1 line-through dark:bg-red-950/40 dark:text-red-400">
               {t(
@@ -463,7 +602,6 @@ export default function TranscriptPanel() {
               )}
             </span>
           )}
-          {status === "ready" && <TranscriptToolsMenu />}
           {(status === "ready" ||
             status === "error" ||
             status === "transcribing") && (
@@ -500,7 +638,8 @@ export default function TranscriptPanel() {
           >
             {showDeleted ? <Eye size={14} /> : <EyeOff size={14} />}
           </button>
-        </div>
+          </div>
+        )}
       </div>
 
       <div
@@ -622,45 +761,6 @@ export default function TranscriptPanel() {
             </div>
           )}
 
-          {toolbarOpen && selection && (
-            <FloatingPortal>
-              <div
-                ref={setToolbarFloating}
-                data-transcript-toolbar
-                className="z-40 flex items-center gap-0.5 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg shadow-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-800 dark:shadow-black/30"
-                style={toolbarStyles}
-                onMouseDown={(e) => e.preventDefault()}
-              >
-                {selection.anyKept && (
-                  <button
-                    onClick={cutSelection}
-                    className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-zinc-700 transition hover:bg-red-50 hover:text-red-600 dark:text-zinc-200 dark:hover:bg-red-950/50 dark:hover:text-red-400"
-                  >
-                    <Scissors size={13} />
-                    {t("transcript.cut")}
-                  </button>
-                )}
-                {selection.anyDeleted && (
-                  <button
-                    onClick={restoreSelection}
-                    className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-zinc-700 transition hover:bg-emerald-50 hover:text-emerald-600 dark:text-zinc-200 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-400"
-                  >
-                    <RotateCcw size={13} />
-                    {t("common.restore")}
-                  </button>
-                )}
-                <button
-                  onClick={openCorrect}
-                  className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                >
-                  <Pencil size={13} />
-                  {t("transcript.correct")}
-                </button>
-                <SelectionSpeakerButton onClick={openSpeakerAssign} />
-              </div>
-            </FloatingPortal>
-          )}
-
           {assigningSpeaker && (
             <SelectionSpeakerPopover
               wordIds={assigningSpeaker.ids}
@@ -669,50 +769,6 @@ export default function TranscriptPanel() {
             />
           )}
 
-          {correcting && (
-            <FloatingPortal>
-              <div
-                ref={(node: HTMLDivElement | null) => {
-                  popoverRef.current = node;
-                  setCorrectFloating(node);
-                }}
-                className="z-40 w-80 max-w-[calc(100vw-16px)] rounded-2xl border border-zinc-200 bg-white p-3 shadow-xl shadow-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-800 dark:shadow-black/40"
-                style={correctStyles}
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">
-                    {t("transcript.correct")}
-                  </span>
-                  <button
-                    onClick={closeCorrect}
-                    className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-                <input
-                  autoFocus
-                  value={correctText}
-                  onChange={(e) => setCorrectText(e.target.value)}
-                  onFocus={(e) => e.currentTarget.select()}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") applyCorrection();
-                    else if (e.key === "Escape") closeCorrect();
-                  }}
-                  className="w-full rounded-lg border border-zinc-300 bg-zinc-50 px-2.5 py-1.5 text-sm text-zinc-800 outline-none focus:border-zinc-500 focus:bg-white dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-400 dark:focus:bg-zinc-950"
-                />
-                <div className="mt-2.5 flex justify-end">
-                  <button
-                    onClick={applyCorrection}
-                    disabled={correctText.trim().length === 0}
-                    className="cursor-pointer flex h-8 items-center rounded-full bg-zinc-900 px-4 text-[13px] font-medium text-white transition hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-                  >
-                    {t("transcript.correct")}
-                  </button>
-                </div>
-              </div>
-            </FloatingPortal>
-          )}
         </div>
       </div>
       {/* Gradient overlay — must match the transcript panel surface */}

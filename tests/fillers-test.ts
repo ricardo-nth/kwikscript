@@ -1,8 +1,35 @@
-import { findFillerWordIds, isFillerWord } from "../lib/fillers";
+import {
+  findDeletedFillerWordIds,
+  findFillerWordIds,
+  isFillerWord,
+} from "../lib/fillers";
 import type { Word } from "../lib/types";
 
 function w(text: string, id: number, deleted = false): Word {
   return { id, text, start: id, end: id + 0.2, speaker: 0, deleted };
+}
+
+{
+  const words = [
+    w("I", 1),
+    w("was", 2),
+    w("like,", 3),
+    w("you", 4),
+    w("know", 5),
+    w("ready", 6),
+  ];
+  const ids = findFillerWordIds(words, ["like", "you know"]);
+  if (ids.join(",") !== "3,4,5") {
+    throw new Error(`unexpected custom filler ids: ${ids.join(",")}`);
+  }
+}
+
+{
+  const words = [w("you", 1, true), w("know", 2, true), w("why", 3)];
+  const ids = findDeletedFillerWordIds(words, ["you know"]);
+  if (ids.join(",") !== "1,2") {
+    throw new Error(`unexpected deleted custom filler ids: ${ids.join(",")}`);
+  }
 }
 
 {

@@ -20,6 +20,7 @@ import UploadScreen from "./UploadScreen";
 import TranscriptPanel from "./TranscriptPanel";
 import MediaPreview from "./MediaPreview";
 import Timeline from "./Timeline";
+import CleanupSidebar from "./CleanupSidebar";
 import ExportDialog from "./ExportDialog";
 import { Download, Redo2, Undo2 } from "lucide-react";
 import LogoLoader from "./LogoLoader";
@@ -111,20 +112,28 @@ function EditorWorkspace() {
   // playback / spacebar / timeline controls.
   if (mediaKind === "audio") {
     return (
-      <>
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <CleanupSidebar />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <TranscriptPanel />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <TranscriptPanel />
+          </div>
+          <MediaPreview />
         </div>
-        <MediaPreview />
-      </>
+      </div>
     );
   }
   // Keyed so crossing the breakpoint remounts the group and restores that
   // orientation's saved layout instead of carrying sizes across.
-  return isDesktop ? (
-    <SplitWorkspace key="horizontal" orientation="horizontal" />
-  ) : (
-    <SplitWorkspace key="vertical" orientation="vertical" />
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1">
+      <CleanupSidebar />
+      {isDesktop ? (
+        <SplitWorkspace key="horizontal" orientation="horizontal" />
+      ) : (
+        <SplitWorkspace key="vertical" orientation="vertical" />
+      )}
+    </div>
   );
 }
 

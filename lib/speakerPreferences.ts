@@ -7,12 +7,20 @@ export function loadSpeakerDetectionPreference(): boolean {
   if (typeof localStorage === "undefined") {
     return DEFAULT_DETECT_MULTIPLE_SPEAKERS;
   }
-  const stored = localStorage.getItem(SPEAKER_DETECTION_KEY);
-  if (stored === null) return DEFAULT_DETECT_MULTIPLE_SPEAKERS;
-  return stored === "true";
+  try {
+    const stored = localStorage.getItem(SPEAKER_DETECTION_KEY);
+    if (stored === null) return DEFAULT_DETECT_MULTIPLE_SPEAKERS;
+    return stored === "true";
+  } catch {
+    return DEFAULT_DETECT_MULTIPLE_SPEAKERS;
+  }
 }
 
 export function saveSpeakerDetectionPreference(enabled: boolean): void {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(SPEAKER_DETECTION_KEY, String(enabled));
+  try {
+    localStorage.setItem(SPEAKER_DETECTION_KEY, String(enabled));
+  } catch {
+    // Private mode or disabled storage: keep the current session usable.
+  }
 }

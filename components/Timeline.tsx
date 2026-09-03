@@ -43,6 +43,7 @@ import { peakBetween } from "@/lib/waveform";
 import { useCutRanges } from "@/hooks/useCutRanges";
 import { useIsDark } from "@/hooks/useIsDark";
 import { useI18n } from "./I18nProvider";
+import { useCustomFillers } from "@/hooks/useCustomFillers";
 
 const RULER_H = 18;
 const WORDBAR_H = 28;
@@ -104,6 +105,7 @@ type DragKind =
 
 export default function Timeline() {
   const { t } = useI18n();
+  const { fillers: customFillers } = useCustomFillers();
   const waveform = useEditorStore((s) => s.waveform);
   const words = useEditorStore((s) => s.words);
   const silencePreviewRanges = useEditorStore((s) => s.silencePreviewRanges);
@@ -121,8 +123,8 @@ export default function Timeline() {
 
   const cuts = useCutRanges();
   const fillerCandidateIds = useMemo(
-    () => new Set(findFillerWordIds(words)),
-    [words],
+    () => new Set(findFillerWordIds(words, customFillers)),
+    [words, customFillers],
   );
   const keeps = useMemo(() => getKeepRanges(cuts, duration), [cuts, duration]);
   const clips = useMemo(

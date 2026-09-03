@@ -26,7 +26,8 @@ spacing:
   toolbar-height: "3rem"
 components:
   button: {}
-  popover: {}
+  cleanup-sidebar: {}
+  transcript-action-bar: {}
   timeline: {}
   transcript: {}
   media-preview: {}
@@ -61,7 +62,7 @@ Geist is the product face; system fallbacks cover every supported script. Contro
 
 ## Layout
 
-The editor is a resizable transcript/media workspace above a full-width timeline. Toolbar height and popover geometry remain stable across state changes. Small settings live in existing popovers; primary editing actions remain visible without navigating away from the transcript. The toolbar reads in editing order: waveform-defined quiet audio is the optional rough-cut stage, then a divider introduces transcript cleanup through filler words and pauses. These are separate top-level tools because they answer different editing questions and keep independent remembered settings. Kept transcript words are protected regions: waveform cleanup may tighten quiet audio around them, but cannot propose a cut through recognized speech.
+The editor is a three-column cleanup/transcript/media workspace above a full-width timeline. The persistent left sidebar follows the working order: waveform-defined quiet audio, filler words, then transcript pauses. Only the selected tool exposes its controls, while the transcript and timeline remain visible so candidate changes can be judged in context. The middle transcript header owns contextual selection actions; it never covers the selected words. The right panel remains the resizable media preview. Kept transcript words are protected regions: waveform cleanup may tighten quiet audio around them, but cannot propose a cut through recognized speech.
 
 ## Elevation & Depth
 
@@ -75,7 +76,7 @@ Controls use 6–12 px radii: tighter for dense segmented controls, broader for 
 
 ### Foundational visual states
 
-Every action has visible hover, focus, pressed, disabled, and busy treatment. Loading indicators reserve their final geometry. Amber transcript-led and cool-gray waveform-led ranges are playable previews; red deleted ranges are committed and restorable. Only one silence tool owns the candidate layer at a time. Its pressed toolbar state remains visible and its candidates remain inspectable after the settings popover closes; activating the other silence tool replaces the layer, while entering filler-word cleanup clears it.
+Every action has visible hover, focus, pressed, disabled, and busy treatment. Loading indicators reserve their final geometry. Amber transcript-led and cool-gray waveform-led ranges are playable previews; red deleted ranges are committed and restorable. Only the active sidebar tool owns the candidate layer: choosing quiet audio or pauses replaces the other preview, while choosing filler words clears silence previews. Tool counts and the bottom remove/restore actions remain in stable locations as settings change.
 
 ### Buttons and actions
 
@@ -87,7 +88,7 @@ The native desktop menu owns project history. The transcript, preview, and timel
 
 ### Forms and overlays
 
-Settings reuse the established compact popover, native checkbox semantics, and localized explanatory text. Popovers do not alter page layout and restore focus when dismissed.
+Silence settings and the personal filler-word library live in the persistent cleanup sidebar. Personal words and consecutive-word phrases are stored on the device and apply to every project. Selecting transcript words exposes Cut, Correct, and Mark as filler in the transcript header; Speaker appears only when multi-speaker detection is enabled. Correction also happens in that header. Popovers are reserved for genuine anchored choices such as speaker assignment.
 
 ### Media preview
 
@@ -108,6 +109,8 @@ Copy names the result in plain language: remove, restore, import, and export. Ti
 ## Do's and Don'ts
 
 - **Do:** Keep transcript, waveform, and playback state synchronized and reversible.
+- **Do:** Keep cleanup controls visible while the creator inspects transcript and timeline previews.
 - **Do:** Put infrequent performance features in Settings and explain their cost.
 - **Don't:** Add top-level controls for options that most single-speaker projects never need.
+- **Don't:** Cover transcript text with routine cleanup or selection controls.
 - **Don't:** Use decoration, hidden scroll behavior, or shifting layouts that obscure timing and edit state.
