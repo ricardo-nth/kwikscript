@@ -34,6 +34,8 @@ export interface SilencePreferences {
   padStart: number;
   /** Existing quiet audio retained before the speech on the right of a cut. */
   padEnd: number;
+  /** Whether one control keeps left and right padding equal. */
+  paddingLocked: boolean;
   /** Gaps longer than this stay untouched. */
   maxDuration: number;
   /** Whether duration matching starts at the practical floor or a chosen minimum. */
@@ -45,6 +47,7 @@ export const DEFAULT_SILENCE_PREFERENCES: SilencePreferences = {
   minDuration: MIN_SILENCE_DURATION,
   padStart: SILENCE_PAD,
   padEnd: SILENCE_PAD,
+  paddingLocked: true,
   maxDuration: DEFAULT_SILENCE_MAX_DURATION,
   durationMode: "between",
 };
@@ -78,6 +81,27 @@ export function normalizeSilencePreferences(
     durationMode === "between" ? minDuration : SILENCE_DURATION_MIN,
     SILENCE_MAX_DURATION_MAX
   );
+  const storedPadStart = clamp(
+    finiteNumber(
+      value?.padStart,
+      finiteNumber(value?.pad, DEFAULT_SILENCE_PREFERENCES.padStart)
+    ),
+    SILENCE_PAD_MIN,
+    SILENCE_PAD_MAX
+  );
+  const storedPadEnd = clamp(
+    finiteNumber(
+      value?.padEnd,
+      finiteNumber(value?.pad, DEFAULT_SILENCE_PREFERENCES.padEnd)
+    ),
+    SILENCE_PAD_MIN,
+    SILENCE_PAD_MAX
+  );
+  const paddingLocked =
+    typeof value?.paddingLocked === "boolean"
+      ? value.paddingLocked
+      : Math.abs(storedPadStart - storedPadEnd) < SILENCE_PAD_STEP / 2;
+  const linkedPadding = Math.max(storedPadStart, storedPadEnd);
   return {
     threshold: clamp(
       finiteNumber(value?.threshold, DEFAULT_SILENCE_PREFERENCES.threshold),
@@ -85,22 +109,9 @@ export function normalizeSilencePreferences(
       SILENCE_THRESHOLD_MAX
     ),
     minDuration,
-    padStart: clamp(
-      finiteNumber(
-        value?.padStart,
-        finiteNumber(value?.pad, DEFAULT_SILENCE_PREFERENCES.padStart)
-      ),
-      SILENCE_PAD_MIN,
-      SILENCE_PAD_MAX
-    ),
-    padEnd: clamp(
-      finiteNumber(
-        value?.padEnd,
-        finiteNumber(value?.pad, DEFAULT_SILENCE_PREFERENCES.padEnd)
-      ),
-      SILENCE_PAD_MIN,
-      SILENCE_PAD_MAX
-    ),
+    padStart: paddingLocked ? linkedPadding : storedPadStart,
+    padEnd: paddingLocked ? linkedPadding : storedPadEnd,
+    paddingLocked,
     maxDuration,
     durationMode,
   };

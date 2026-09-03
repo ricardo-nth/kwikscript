@@ -16,6 +16,21 @@ function assert(value: unknown, message: string): asserts value {
   // Older experimental saves used one symmetric `pad` value.
   const migrated = normalizeSilencePreferences({ pad: 0.12 });
   assert(migrated.padStart === 0.12 && migrated.padEnd === 0.12, "legacy pad migrated");
+  assert(migrated.paddingLocked, "symmetric legacy padding migrates as linked");
+}
+
+{
+  const independent = normalizeSilencePreferences({ padStart: 0.03, padEnd: 0.08 });
+  assert(!independent.paddingLocked, "unequal legacy padding stays independent");
+  const linked = normalizeSilencePreferences({
+    padStart: 0.03,
+    padEnd: 0.08,
+    paddingLocked: true,
+  });
+  assert(
+    linked.padStart === 0.08 && linked.padEnd === 0.08,
+    "linking padding keeps the safer larger value",
+  );
 }
 
 {

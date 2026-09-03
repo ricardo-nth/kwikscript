@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
+import {
+  Group,
+  Panel,
+  Separator,
+  useDefaultLayout,
+  usePanelRef,
+} from "react-resizable-panels";
 import { useEditorStore } from "@/lib/store";
 import { getCutRanges, isWordCutOut } from "@/lib/edits";
 import { extractAudio, getFFmpeg, releaseFFmpeg } from "@/lib/ffmpeg";
@@ -33,8 +39,20 @@ import ModelSelector, {
 import ImportTranscriptOption from "./ImportTranscriptOption";
 import { MODEL_ORDER } from "@/lib/models";
 import { isTypingTarget } from "@/lib/keyboard";
+import {
+  loadCleanupSidebarVisible,
+  loadVideoPreviewVisible,
+  saveCleanupSidebarVisible,
+  saveVideoPreviewVisible,
+} from "@/lib/editorLayoutPreferences";
 import { en } from "@/lib/i18n/messages/en";
 import { useI18n } from "./I18nProvider";
+import {
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+} from "lucide-react";
 
 /** How long the desktop mode-change overlay stays up. Matches the macOS
  *  `setBounds(..., animate)` duration plus a small buffer so the layout
@@ -44,16 +62,33 @@ const WINDOW_MODE_OVERLAY_MS = 380;
 /** Transcript and preview split, resizable in both orientations. Wide screens
  *  put the transcript first (left of the preview); stacked screens lead with
  *  the preview on top. Each orientation remembers its own sizes. */
-function SplitWorkspace({ orientation }: { orientation: "horizontal" | "vertical" }) {
+function SplitWorkspace({
+  orientation,
+  previewVisible,
+}: {
+  orientation: "horizontal" | "vertical";
+  previewVisible: boolean;
+}) {
   const horizontal = orientation === "horizontal";
+  const previewPanelRef = usePanelRef();
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: `editor-workspace-${orientation}`,
     storage: typeof window !== "undefined" ? localStorage : undefined,
   });
 
+  useEffect(() => {
+    const previewPanel = previewPanelRef.current;
+    if (!previewPanel) return;
+    if (previewVisible) previewPanel.expand();
+    else previewPanel.collapse();
+  }, [previewPanelRef, previewVisible]);
+
   const preview = (
     <Panel
       id="media"
+      panelRef={previewPanelRef}
+      collapsible
+      collapsedSize={0}
       defaultSize={horizontal ? "44%" : "34vh"}
       minSize={horizontal ? 320 : 140}
       className="flex min-h-0 min-w-0 flex-col"
@@ -73,7 +108,7 @@ function SplitWorkspace({ orientation }: { orientation: "horizontal" | "vertical
   );
   const separator = (
     <Separator
-      className={`${horizontal ? "w-px" : "h-px"} bg-zinc-200 outline-none transition-colors hover:bg-zinc-300 data-[separator=active]:bg-zinc-300 data-[separator=focus]:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:data-[separator=active]:bg-zinc-700 dark:data-[separator=focus]:bg-zinc-700`}
+      className={`${horizontal ? "w-px" : "h-px"} bg-zinc-200 outline-none transition-[background-color,opacity] hover:bg-zinc-300 data-[separator=active]:bg-zinc-300 data-[separator=focus]:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:data-[separator=active]:bg-zinc-700 dark:data-[separator=focus]:bg-zinc-700 ${previewVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}
     />
   );
 
@@ -104,7 +139,13 @@ function SplitWorkspace({ orientation }: { orientation: "horizontal" | "vertical
   );
 }
 
-function EditorWorkspace() {
+function EditorWorkspace({
+  cleanupSidebarVisible,
+  videoPreviewVisible,
+}: {
+  cleanupSidebarVisible: boolean;
+  videoPreviewVisible: boolean;
+}) {
   const isDesktop = useIsDesktopLayout();
   const mediaKind = useEditorStore((s) => s.mediaKind);
   // Audio has no visual preview — give the transcript the full workspace and
@@ -113,7 +154,7 @@ function EditorWorkspace() {
   if (mediaKind === "audio") {
     return (
       <div className="flex min-h-0 min-w-0 flex-1">
-        <CleanupSidebar />
+        {cleanupSidebarVisible && <CleanupSidebar />}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <TranscriptPanel />
@@ -127,13 +168,54 @@ function EditorWorkspace() {
   // orientation's saved layout instead of carrying sizes across.
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
-      <CleanupSidebar />
+      {cleanupSidebarVisible && <CleanupSidebar />}
       {isDesktop ? (
-        <SplitWorkspace key="horizontal" orientation="horizontal" />
+        <SplitWorkspace
+          key="horizontal"
+          orientation="horizontal"
+          previewVisible={videoPreviewVisible}
+        />
       ) : (
-        <SplitWorkspace key="vertical" orientation="vertical" />
+        <SplitWorkspace
+          key="vertical"
+          orientation="vertical"
+          previewVisible={videoPreviewVisible}
+        />
       )}
     </div>
+  );
+}
+
+function PaneToggle({
+  visible,
+  side,
+  label,
+  onToggle,
+}: {
+  visible: boolean;
+  side: "left" | "right";
+  label: string;
+  onToggle: () => void;
+}) {
+  const Icon =
+    side === "left"
+      ? visible
+        ? PanelLeftClose
+        : PanelLeftOpen
+      : visible
+        ? PanelRightClose
+        : PanelRightOpen;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={label}
+      aria-label={label}
+      aria-pressed={visible}
+      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+    >
+      <Icon size={16} />
+    </button>
   );
 }
 
@@ -151,8 +233,15 @@ export default function Editor() {
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
   const setExportOpen = useEditorStore((s) => s.setExportOpen);
+  const mediaKind = useEditorStore((s) => s.mediaKind);
 
   const [modeTransitioning, setModeTransitioning] = useState(false);
+  const [cleanupSidebarVisible, setCleanupSidebarVisible] = useState(
+    loadCleanupSidebarVisible,
+  );
+  const [videoPreviewVisible, setVideoPreviewVisible] = useState(
+    loadVideoPreviewVisible,
+  );
   const wasIdle = useRef(status === "idle");
 
   // File › Open Project… reaches the same picker the upload screen uses, from
@@ -416,9 +505,46 @@ export default function Editor() {
               {t("editor.export")}
             </button>
             <div className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
+            <PaneToggle
+              visible={cleanupSidebarVisible}
+              side="left"
+              label={t(
+                cleanupSidebarVisible
+                  ? "editor.hideCleanupSidebar"
+                  : "editor.showCleanupSidebar",
+              )}
+              onToggle={() => {
+                setCleanupSidebarVisible((current) => {
+                  const next = !current;
+                  saveCleanupSidebarVisible(next);
+                  return next;
+                });
+              }}
+            />
+            {mediaKind === "video" && (
+              <PaneToggle
+                visible={videoPreviewVisible}
+                side="right"
+                label={t(
+                  videoPreviewVisible
+                    ? "editor.hideVideoPreview"
+                    : "editor.showVideoPreview",
+                )}
+                onToggle={() => {
+                  setVideoPreviewVisible((current) => {
+                    const next = !current;
+                    saveVideoPreviewVisible(next);
+                    return next;
+                  });
+                }}
+              />
+            )}
             <SettingsMenu />
           </TopBar>
-          <EditorWorkspace />
+          <EditorWorkspace
+            cleanupSidebarVisible={cleanupSidebarVisible}
+            videoPreviewVisible={videoPreviewVisible}
+          />
           <Timeline />
         </>
       )}

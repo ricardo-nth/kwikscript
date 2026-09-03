@@ -11,6 +11,9 @@ import {
 } from "react";
 import {
   AudioWaveform,
+  CircleHelp,
+  Lock,
+  LockOpen,
   Pause,
   Plus,
   RotateCcw,
@@ -48,6 +51,7 @@ import {
 import { normalizeCustomFiller } from "@/lib/fillerPreferences";
 import { useCustomFillers } from "@/hooks/useCustomFillers";
 import { useI18n } from "./I18nProvider";
+import Popover, { PopoverContent, PopoverTrigger } from "./Popover";
 
 type CleanupTool = "quiet" | "fillers" | "pauses";
 
@@ -96,6 +100,8 @@ function SettingSlider({
   step,
   suffix = "s",
   formatValue = seconds,
+  info,
+  compact = false,
   onChange,
 }: {
   id: string;
@@ -106,20 +112,31 @@ function SettingSlider({
   step: number;
   suffix?: string;
   formatValue?: (value: number) => string;
+  info?: string;
+  compact?: boolean;
   onChange: (value: number) => void;
 }) {
+  const { t } = useI18n();
   const valueText = `${formatValue(value)}${suffix}`;
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between gap-3">
-        <label
-          htmlFor={id}
-          className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300"
-        >
-          {label}
-        </label>
-        <label className="flex shrink-0 items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-          <span className="sr-only">{label}</span>
+      <div
+        className={`mb-1.5 flex items-center justify-between ${compact ? "gap-1" : "gap-3"}`}
+      >
+        <div className="flex items-center gap-1">
+          <label
+            htmlFor={id}
+            className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300"
+          >
+            {label}
+          </label>
+          {info && (
+            <InlineInfo label={t("tools.moreInfo", { topic: label })}>
+              <p>{info}</p>
+            </InlineInfo>
+          )}
+        </div>
+        <div className="relative shrink-0">
           <input
             type="number"
             value={value}
@@ -131,10 +148,17 @@ function SettingSlider({
               const next = Number(event.target.value);
               if (Number.isFinite(next)) onChange(next);
             }}
-            className="h-7 w-[4.75rem] rounded-md border border-zinc-200 bg-white px-2 text-right text-[11px] tabular-nums text-zinc-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:focus:border-indigo-500"
+            className={`h-7 rounded-md border border-zinc-200 bg-white py-0 pl-1.5 text-right text-[11px] tabular-nums text-zinc-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:focus:border-indigo-500 ${compact ? "w-16" : "w-[5rem]"} ${suffix ? "pr-5" : "pr-2"}`}
           />
-          {suffix && <span aria-hidden="true">{suffix}</span>}
-        </label>
+          {suffix && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-zinc-400 dark:text-zinc-500"
+            >
+              {suffix}
+            </span>
+          )}
+        </div>
       </div>
       <input
         id={id}
@@ -151,49 +175,90 @@ function SettingSlider({
   );
 }
 
-function ToolHeading({
-  icon: Icon,
-  title,
-  help,
-  count,
-  tone,
+function InlineInfo({
+  label,
+  children,
 }: {
-  icon: LucideIcon;
-  title: string;
-  help: string;
-  count: number;
-  tone: "quiet" | "transcript";
+  label: string;
+  children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex items-start gap-2.5">
-      <Icon
-        size={16}
-        className={`mt-0.5 shrink-0 ${
-          tone === "quiet"
-            ? "text-slate-500 dark:text-slate-400"
-            : "text-amber-500 dark:text-amber-400"
-        }`}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">
-            {title}
-          </h2>
-          <span
-            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
-              tone === "quiet"
-                ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                : "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
-            }`}
-          >
-            {count}
-          </span>
-        </div>
-        <p className="mt-1 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
-          {help}
-        </p>
-      </div>
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      placement="right-start"
+      offsetMain={6}
+    >
+      <PopoverTrigger>
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          title={label}
+          aria-label={label}
+          aria-expanded={open}
+          className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-zinc-400 transition hover:bg-zinc-200/70 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+        >
+          <CircleHelp size={13} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        role="note"
+        className="z-50 w-56 px-3 py-2 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-300"
+      >
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function SectionLabel({
+  children,
+  info,
+}: {
+  children: React.ReactNode;
+  info?: string;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="mb-2 flex min-h-6 items-center gap-1">
+      <h3 className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+        {children}
+      </h3>
+      {info && (
+        <InlineInfo label={t("tools.moreInfo", { topic: String(children) })}>
+          <p>{info}</p>
+        </InlineInfo>
+      )}
     </div>
+  );
+}
+
+function PaddingLinkButton({
+  locked,
+  onClick,
+}: {
+  locked: boolean;
+  onClick: () => void;
+}) {
+  const { t } = useI18n();
+  const label = t(locked ? "tools.unlinkPadding" : "tools.linkPadding");
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      aria-pressed={locked}
+      className={`flex h-6 cursor-pointer items-center gap-1 rounded-md px-1.5 text-[10px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 ${
+        locked
+          ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/60"
+          : "text-zinc-400 hover:bg-zinc-200/70 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+      }`}
+    >
+      {locked ? <Lock size={12} /> : <LockOpen size={12} />}
+      <span>{t(locked ? "tools.paddingLinked" : "tools.paddingIndependent")}</span>
+    </button>
   );
 }
 
@@ -214,15 +279,17 @@ function SilenceControls({
   const maxDurationId = useId();
   const leftPadId = useId();
   const rightPadId = useId();
+  const linkedPadId = useId();
   const isQuiet = tool === "quiet";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
       {isQuiet && (
         <div>
           <SettingSlider
             id={thresholdId}
             label={t("tools.loudnessThreshold")}
+            info={t("tools.loudnessThresholdHelp")}
             value={preferences.threshold}
             min={SILENCE_THRESHOLD_MIN}
             max={SILENCE_THRESHOLD_MAX}
@@ -235,22 +302,25 @@ function SilenceControls({
               onPreferencesChange((current) => ({ ...current, threshold }))
             }
           />
-          <p className="mt-1 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
-            {t("tools.loudnessThresholdHelp")}
-          </p>
         </div>
       )}
 
       <div>
-        <p className="mb-2 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+        <SectionLabel
+          info={`${t(
+            isQuiet
+              ? "tools.quietAudioCleanupHelp"
+              : "tools.pauseCleanupHelp",
+          )} ${t("tools.durationBeforePaddingHelp")}`}
+        >
           {t(isQuiet ? "tools.quietDurationRange" : "tools.pauseDurationRange")}
-        </p>
+        </SectionLabel>
         <div
           role="radiogroup"
           aria-label={t(
             isQuiet ? "tools.quietDurationRange" : "tools.pauseDurationRange",
           )}
-          className="mb-3 grid grid-cols-2 gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
+          className="mb-2.5 grid grid-cols-2 gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
         >
           {(["upTo", "between"] as const).map((durationMode) => {
             const selected = preferences.durationMode === durationMode;
@@ -281,7 +351,7 @@ function SilenceControls({
             );
           })}
         </div>
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {preferences.durationMode === "between" && (
             <SettingSlider
               id={minDurationId}
@@ -321,38 +391,79 @@ function SilenceControls({
             }
           />
         </div>
-        <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
-          {t("tools.durationBeforePaddingHelp")}
-        </p>
       </div>
 
       <div>
-        <p className="mb-2 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
-          {t("tools.padding")}
-        </p>
-        <div className="space-y-3">
-          <SettingSlider
-            id={leftPadId}
-            label={t("tools.leftPadding")}
-            value={preferences.padStart}
-            min={SILENCE_PAD_MIN}
-            max={SILENCE_PAD_MAX}
-            step={SILENCE_PAD_STEP}
-            onChange={(padStart) =>
-              onPreferencesChange((current) => ({ ...current, padStart }))
+        <div className="mb-2 flex min-h-6 items-center justify-between gap-2">
+          <h3 className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+            {t("tools.padding")}
+          </h3>
+          <PaddingLinkButton
+            locked={preferences.paddingLocked}
+            onClick={() =>
+              onPreferencesChange((current) => {
+                if (!current.paddingLocked) {
+                  const linkedPadding = Math.max(
+                    current.padStart,
+                    current.padEnd,
+                  );
+                  return {
+                    ...current,
+                    paddingLocked: true,
+                    padStart: linkedPadding,
+                    padEnd: linkedPadding,
+                  };
+                }
+                return { ...current, paddingLocked: false };
+              })
             }
           />
-          <SettingSlider
-            id={rightPadId}
-            label={t("tools.rightPadding")}
-            value={preferences.padEnd}
-            min={SILENCE_PAD_MIN}
-            max={SILENCE_PAD_MAX}
-            step={SILENCE_PAD_STEP}
-            onChange={(padEnd) =>
-              onPreferencesChange((current) => ({ ...current, padEnd }))
-            }
-          />
+        </div>
+        <div className={preferences.paddingLocked ? "" : "grid grid-cols-2 gap-3"}>
+          {preferences.paddingLocked ? (
+            <SettingSlider
+              id={linkedPadId}
+              label={t("tools.bothPadding")}
+              value={preferences.padStart}
+              min={SILENCE_PAD_MIN}
+              max={SILENCE_PAD_MAX}
+              step={SILENCE_PAD_STEP}
+              onChange={(padding) =>
+                onPreferencesChange((current) => ({
+                  ...current,
+                  padStart: padding,
+                  padEnd: padding,
+                }))
+              }
+            />
+          ) : (
+            <>
+              <SettingSlider
+                id={leftPadId}
+                label={t("tools.leftPadding")}
+                compact
+                value={preferences.padStart}
+                min={SILENCE_PAD_MIN}
+                max={SILENCE_PAD_MAX}
+                step={SILENCE_PAD_STEP}
+                onChange={(padStart) =>
+                  onPreferencesChange((current) => ({ ...current, padStart }))
+                }
+              />
+              <SettingSlider
+                id={rightPadId}
+                label={t("tools.rightPadding")}
+                compact
+                value={preferences.padEnd}
+                min={SILENCE_PAD_MIN}
+                max={SILENCE_PAD_MAX}
+                step={SILENCE_PAD_STEP}
+                onChange={(padEnd) =>
+                  onPreferencesChange((current) => ({ ...current, padEnd }))
+                }
+              />
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -375,12 +486,12 @@ function ActionFooter({
   onRemove: () => void;
 }) {
   return (
-    <div className="flex flex-col-reverse gap-2 border-t border-zinc-200 bg-zinc-50/90 p-3 dark:border-zinc-800 dark:bg-zinc-900/90">
+    <div className="grid grid-cols-2 gap-1.5 border-t border-zinc-200 bg-zinc-50/90 p-2.5 dark:border-zinc-800 dark:bg-zinc-900/90">
       <button
         type="button"
         disabled={!canRestore}
         onClick={onRestore}
-        className="flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2 text-[11px] font-medium text-zinc-600 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-white dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:disabled:text-zinc-700 dark:disabled:hover:bg-zinc-950"
+        className="flex h-9 min-w-0 cursor-pointer items-center justify-center gap-1 rounded-lg border border-zinc-200 bg-white px-1.5 text-[10px] font-medium text-zinc-600 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-white dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:disabled:text-zinc-700 dark:disabled:hover:bg-zinc-950"
       >
         <RotateCcw size={13} />
         <span>{restoreLabel}</span>
@@ -389,7 +500,7 @@ function ActionFooter({
         type="button"
         disabled={!canRemove}
         onClick={onRemove}
-        className="flex min-h-9 cursor-pointer items-center justify-center rounded-lg bg-indigo-600 px-2 text-[11px] font-medium text-white transition hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/45 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 dark:focus-visible:ring-offset-zinc-900 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600"
+        className="flex h-9 min-w-0 cursor-pointer items-center justify-center rounded-lg bg-indigo-600 px-1.5 text-center text-[10px] font-medium leading-tight text-white transition hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/45 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 dark:focus-visible:ring-offset-zinc-900 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600"
       >
         <span>{removeLabel}</span>
       </button>
@@ -575,10 +686,7 @@ export default function CleanupSidebar() {
       aria-label={t("tools.cleanupSidebar")}
       className="flex w-[17rem] shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 max-[820px]:w-[14rem]"
     >
-      <div className="border-b border-zinc-200 px-2.5 pb-2.5 pt-2 dark:border-zinc-800">
-        <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
-          {t("tools.cleanupSidebar")}
-        </p>
+      <div className="border-b border-zinc-200 p-2 dark:border-zinc-800">
         <div
           role="tablist"
           aria-label={t("tools.cleanupSidebar")}
@@ -630,26 +738,18 @@ export default function CleanupSidebar() {
         aria-labelledby={`cleanup-tab-${activeTool}`}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
           {activeTool === "fillers" ? (
-            <div className="space-y-5">
-              <ToolHeading
-                icon={WandSparkles}
-                title={t("tools.fillerCleanup")}
-                help={t("tools.fillerCleanupHelp")}
-                count={fillerIds.length}
-                tone="transcript"
-              />
+            <div className="space-y-3">
               <div>
-                <h3 className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+                <SectionLabel
+                  info={`${t("tools.fillerCleanupHelp")} ${t("tools.customFillersHelp")} ${t("tools.builtInFillersHelp")}`}
+                >
                   {t("tools.customFillers")}
-                </h3>
-                <p className="mt-1 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
-                  {t("tools.customFillersHelp")}
-                </p>
+                </SectionLabel>
                 <form
                   noValidate
-                  className="mt-3 flex gap-1.5"
+                  className="flex gap-1.5"
                   onSubmit={(event) => {
                     event.preventDefault();
                     addNewFiller();
@@ -680,7 +780,7 @@ export default function CleanupSidebar() {
                     <Plus size={14} />
                   </button>
                 </form>
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
                   {customFillers.length > 0 ? (
                     customFillers.map((filler) => (
                       <span
@@ -710,27 +810,9 @@ export default function CleanupSidebar() {
                   )}
                 </div>
               </div>
-              <p className="border-t border-zinc-200 pt-3 text-[10px] leading-relaxed text-zinc-400 dark:border-zinc-800 dark:text-zinc-500">
-                {t("tools.builtInFillersHelp")}
-              </p>
             </div>
           ) : (
-            <div className="space-y-5">
-              <ToolHeading
-                icon={activeTool === "quiet" ? AudioWaveform : Pause}
-                title={t(
-                  activeTool === "quiet"
-                    ? "tools.quietAudioCleanup"
-                    : "tools.pauseCleanup",
-                )}
-                help={t(
-                  activeTool === "quiet"
-                    ? "tools.quietAudioCleanupHelp"
-                    : "tools.pauseCleanupHelp",
-                )}
-                count={activeRanges.length}
-                tone={activeTool === "quiet" ? "quiet" : "transcript"}
-              />
+            <div>
               <SilenceControls
                 tool={activeTool}
                 preferences={activePreferences}

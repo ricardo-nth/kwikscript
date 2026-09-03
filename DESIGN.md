@@ -62,7 +62,7 @@ Geist is the product face; system fallbacks cover every supported script. Contro
 
 ## Layout
 
-The editor is a three-column cleanup/transcript/media workspace above a full-width timeline. The persistent left sidebar follows the working order: waveform-defined quiet audio, filler words, then transcript pauses. Only the selected tool exposes its controls, while the transcript and timeline remain visible so candidate changes can be judged in context. The middle transcript header owns contextual selection actions; it never covers the selected words. The right panel remains the resizable media preview. Kept transcript words are protected regions: waveform cleanup may tighten quiet audio around them, but cannot propose a cut through recognized speech.
+The editor is a three-column cleanup/transcript/media workspace above a full-width timeline. The left cleanup sidebar follows the working order: waveform-defined quiet audio, filler words, then transcript pauses. Top-bar view controls independently collapse the cleanup and media panes, and those device-level choices persist so the transcript can become a distraction-free review surface. Hiding the media pane never unmounts playback; audio projects omit its visual control entirely. Only the selected cleanup tool exposes its controls, while the transcript and timeline remain visible so candidate changes can be judged in context. The middle transcript header owns contextual selection actions; it never covers the selected words. The right panel remains the resizable media preview when shown. Kept transcript words are protected regions: waveform cleanup may tighten quiet audio around them, but cannot propose a cut through recognized speech.
 
 ## Elevation & Depth
 
@@ -88,7 +88,7 @@ The native desktop menu owns project history. The transcript, preview, and timel
 
 ### Forms and overlays
 
-Silence settings and the personal filler-word library live in the persistent cleanup sidebar. Personal words and consecutive-word phrases are stored on the device and apply to every project. Selecting transcript words exposes Cut, Correct, and Mark as filler in the transcript header; Speaker appears only when multi-speaker detection is enabled. Correction also happens in that header. Popovers are reserved for genuine anchored choices such as speaker assignment.
+Silence settings and the personal filler-word library live in the cleanup sidebar. Its tab already owns the tool name and count, so the control panel does not repeat a second heading. Explanatory copy lives behind click-accessible info controls, while units remain inside precise numeric fields. Padding starts linked as one symmetric control and can be unlocked for independent left/right adjustment; linking unequal values keeps the larger, speech-safer value. Personal words and consecutive-word phrases are stored on the device and apply to every project. Selecting transcript words exposes Cut, Correct, and Mark as filler in the transcript header; Speaker appears only when multi-speaker detection is enabled. Correction also happens in that header. Popovers are reserved for genuine anchored choices such as speaker assignment and compact contextual help.
 
 ### Media preview
 
@@ -110,6 +110,7 @@ Copy names the result in plain language: remove, restore, import, and export. Ti
 
 - **Do:** Keep transcript, waveform, and playback state synchronized and reversible.
 - **Do:** Keep cleanup controls visible while the creator inspects transcript and timeline previews.
+- **Do:** Let creators collapse either side pane without interrupting playback or losing their preferred workspace.
 - **Do:** Put infrequent performance features in Settings and explain their cost.
 - **Don't:** Add top-level controls for options that most single-speaker projects never need.
 - **Don't:** Cover transcript text with routine cleanup or selection controls.
