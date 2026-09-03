@@ -60,6 +60,9 @@ const MEDIA_EXTENSIONS = [
 const mediaPaths = new Map<string, string>();
 const exportTempDirs = new Set<string>();
 const nativeTranscriptionJobs = new Map<string, ChildProcess>();
+const previewTempDirs = new Set<string>();
+const nativePreviewJobs = new Map<string, ChildProcess>();
+const previewBySource = new Map<string, { identity: string; url: string }>();
 
 function readableFile(path: unknown): path is string {
   if (typeof path !== "string" || !isAbsolute(path) || !existsSync(path)) return false;
@@ -292,6 +295,124 @@ async function extractAudioNative(path: string): Promise<ArrayBuffer | null> {
       resolve(copy.buffer);
     });
   });
+}
+
+/**
+ * Chromium cannot render every format macOS cameras and editors produce
+ * (notably ProRes MOV). Build a lightweight H.264 viewing proxy while keeping
+ * the original path as the only source used for exports.
+ */
+async function prepareVideoPreviewNative(
+  jobId: string,
+  mediaPath: string,
+  duration: number,
+  onProgress: (ratio: number) => void
+): Promise<string> {
+  const ffmpeg = nativeFfmpegPath();
+  if (!ffmpeg) throw new Error("NATIVE_FFMPEG_UNAVAILABLE");
+
+  const stat = statSync(mediaPath);
+  const identity = `${stat.size}:${stat.mtimeMs}`;
+  const cached = previewBySource.get(mediaPath);
+  if (cached?.identity === identity) return cached.url;
+
+  const dir = mkdtempSync(join(tmpdir(), "kwikscript-preview-"));
+  previewTempDirs.add(dir);
+  const output = join(dir, "preview.mp4");
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        ffmpeg,
+        [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-i",
+          mediaPath,
+          "-map",
+          "0:v:0",
+          "-map",
+          "0:a:0?",
+          "-vf",
+          "scale=min(1280\\,iw):-2",
+          "-c:v",
+          "h264_videotoolbox",
+          "-tag:v",
+          "avc1",
+          "-b:v",
+          "4M",
+          "-maxrate",
+          "6M",
+          "-bufsize",
+          "8M",
+          "-g",
+          "30",
+          "-c:a",
+          "aac",
+          "-b:a",
+          "128k",
+          "-sn",
+          "-dn",
+          "-map_metadata",
+          "-1",
+          "-movflags",
+          "+faststart",
+          "-progress",
+          "pipe:2",
+          "-nostats",
+          "-y",
+          output,
+        ],
+        { stdio: ["ignore", "ignore", "pipe"] }
+      );
+      nativePreviewJobs.set(jobId, child);
+      let stderr = "";
+      let pending = "";
+      child.stderr?.on("data", (chunk: Buffer) => {
+        const text = chunk.toString("utf8");
+        if (stderr.length < 64 * 1024) stderr += text;
+        pending += text;
+        const lines = pending.split(/\r?\n/);
+        pending = lines.pop() ?? "";
+        for (const line of lines) {
+          const match = /^(?:out_time_us|out_time_ms)=(\d+)$/.exec(line);
+          if (!match) continue;
+          const seconds = Number(match[1]) / 1e6;
+          onProgress(Math.min(1, Math.max(0, seconds / Math.max(0.001, duration))));
+        }
+      });
+      child.on("error", reject);
+      child.on("close", (code, signal) => {
+        if (nativePreviewJobs.get(jobId) === child) nativePreviewJobs.delete(jobId);
+        if (code === 0 && readableFile(output)) {
+          resolve();
+          return;
+        }
+        reject(
+          new Error(
+            signal
+              ? "Preview preparation was cancelled."
+              : stderr.trim() || "Video preview preparation failed."
+          )
+        );
+      });
+    });
+    onProgress(1);
+    const url = registerMediaPath(output).url;
+    previewBySource.set(mediaPath, { identity, url });
+    return url;
+  } catch (error) {
+    previewTempDirs.delete(dir);
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // The OS temp cleaner will recover a file still held by FFmpeg.
+    }
+    throw error;
+  } finally {
+    nativePreviewJobs.delete(jobId);
+  }
 }
 
 type NativeExportOptions = {
@@ -852,6 +973,10 @@ if (!gotLock) {
     if (typeof value !== "string") return;
     nativeTranscriptionJobs.get(value)?.kill();
   });
+  ipcMain.on("media:preview-cancel", (_event, value: unknown) => {
+    if (typeof value !== "string") return;
+    nativePreviewJobs.get(value)?.kill();
+  });
   ipcMain.handle(
     "media:resolve-path",
     async (event, value: unknown, expectedName: unknown) => {
@@ -902,6 +1027,26 @@ if (!gotLock) {
     }
   );
   ipcMain.handle(
+    "media:prepare-preview",
+    async (event, jobId: unknown, path: unknown, duration: unknown) => {
+      if (!nativeFfmpegPath()) return { available: false as const };
+      if (
+        typeof jobId !== "string" ||
+        !readableFile(path) ||
+        typeof duration !== "number" ||
+        !Number.isFinite(duration) ||
+        duration <= 0
+      ) {
+        throw new Error("Invalid video preview request.");
+      }
+      const channel = `media:preview-progress:${jobId}`;
+      const url = await prepareVideoPreviewNative(jobId, path, duration, (ratio) => {
+        if (!event.sender.isDestroyed()) event.sender.send(channel, ratio);
+      });
+      return { available: true as const, url };
+    }
+  );
+  ipcMain.handle(
     "media:export",
     async (event, jobId: unknown, value: unknown) => {
       if (!nativeFfmpegPath()) return { available: false };
@@ -926,6 +1071,8 @@ if (!gotLock) {
     quitting = true;
     for (const child of nativeTranscriptionJobs.values()) child.kill();
     nativeTranscriptionJobs.clear();
+    for (const child of nativePreviewJobs.values()) child.kill();
+    nativePreviewJobs.clear();
     for (const dir of exportTempDirs) {
       try {
         rmSync(dir, { recursive: true, force: true });
@@ -934,6 +1081,15 @@ if (!gotLock) {
       }
     }
     exportTempDirs.clear();
+    for (const dir of previewTempDirs) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // The OS temp cleaner will recover anything still in use.
+      }
+    }
+    previewTempDirs.clear();
+    previewBySource.clear();
   });
 
   app.whenReady().then(() => {

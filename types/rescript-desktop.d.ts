@@ -89,6 +89,13 @@ export interface RescriptDesktop {
     onProgress: (progress: { stage: string; fraction: number }) => void
   ) => Promise<DesktopCoreMLTranscription>;
   cancelCoreMLTranscription: () => void;
+  /** Build an H.264 viewing proxy without changing the source used for export. */
+  prepareVideoPreview: (
+    path: string,
+    duration: number,
+    onProgress: (ratio: number) => void
+  ) => Promise<{ available: boolean; url?: string }>;
+  cancelVideoPreview: () => void;
   /** Render directly from a path-backed source without copying it into Chromium. */
   exportMedia: (
     options: DesktopMediaExportOptions,

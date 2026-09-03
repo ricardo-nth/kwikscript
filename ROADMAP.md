@@ -1,6 +1,6 @@
 # Roadmap
 
-User-facing progress for Rescript. Items are marked done when they shipped to
+User-facing progress for KwikScript. Items are marked done when they shipped to
 `main` (web and/or desktop). Internal refactors and CI-only work are omitted.
 
 ## Done
@@ -20,7 +20,8 @@ User-facing progress for Rescript. Items are marked done when they shipped to
 ### Editing & transcript tools
 - [x] Correct misrecognized words (selection → Correct popover; timings redistributed)
 - [x] One-click **Remove fillers** (um / uh / etc.)
-- [x] Configurable **Silence cleanup** (minimum pause length, independent left/right padding, long-pause protection, and presets)
+- [x] Separate transcript-pause and waveform-quiet cleanup with orange previews, duration ranges, independent left/right padding, remembered settings, and unified restore
+- [x] Keep recognized words protected from waveform-threshold cuts
 - [x] Import your own transcript (SRT / VTT / JSON) instead of running Whisper
 - [x] Import cancel UX (no stuck selector / blocked media drop)
 - [x] Manual speaker controls (rename, change, add, move label, merge, remove)
@@ -39,6 +40,7 @@ User-facing progress for Rescript. Items are marked done when they shipped to
 - [x] Edit audio files (mp3 / wav / m4a / …) the same way as video
 - [x] Audio-only workspace (hide empty video preview; transcript gets full width)
 - [x] Audio export (M4A and additional formats via the export dialog)
+- [x] Temporary viewing proxy for source codecs Electron cannot render (including ProRes), without replacing the export source
 
 ### Timeline editing (Descript-style)
 - [x] Drag word start / end to fix ASR bleed
@@ -81,7 +83,8 @@ User-facing progress for Rescript. Items are marked done when they shipped to
 
 ## Next
 
-- [ ] **Parakeet TDT v3** as an optional transcription backend (faster / more accurate word timings)
+- [ ] Personal filler-word and filler-phrase vocabulary
+- [ ] Repetition and false-start detection as a distinct, previewable transcript tool
 - [ ] Fix remaining drift / lag and push word timestamps closer to true speech boundaries
 - [ ] In-app transcript editor (richer inline editing beyond the Correct popover)
 - [ ] Export the timeline itself to video editing tools (e.g. project / EDL / FCPXML-style interchange)

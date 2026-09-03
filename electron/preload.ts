@@ -7,6 +7,7 @@ import {
 import { totalmem } from "node:os";
 
 let activeCoreMLJobId: string | null = null;
+let activePreviewJobId: string | null = null;
 
 /**
  * Minimal bridge for the renderer. Rescript's UI is still a normal web
@@ -86,6 +87,30 @@ contextBridge.exposeInMainWorld("rescriptDesktop", {
     if (!activeCoreMLJobId) return;
     ipcRenderer.send("transcription:cancel", activeCoreMLJobId);
     activeCoreMLJobId = null;
+  },
+  prepareVideoPreview: async (
+    path: string,
+    duration: number,
+    onProgress: (ratio: number) => void
+  ) => {
+    const jobId = crypto.randomUUID();
+    const channel = `media:preview-progress:${jobId}`;
+    const listener = (_event: IpcRendererEvent, value: unknown) => {
+      if (typeof value === "number" && Number.isFinite(value)) onProgress(value);
+    };
+    activePreviewJobId = jobId;
+    ipcRenderer.on(channel, listener);
+    try {
+      return await ipcRenderer.invoke("media:prepare-preview", jobId, path, duration);
+    } finally {
+      ipcRenderer.off(channel, listener);
+      if (activePreviewJobId === jobId) activePreviewJobId = null;
+    }
+  },
+  cancelVideoPreview: () => {
+    if (!activePreviewJobId) return;
+    ipcRenderer.send("media:preview-cancel", activePreviewJobId);
+    activePreviewJobId = null;
   },
   exportMedia: async (
     options: unknown,

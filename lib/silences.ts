@@ -116,8 +116,9 @@ function rmsAmplitude(value: number): number {
 }
 
 /**
- * Find quiet spans from the audio itself. Word timings are used only to avoid
- * proposing audio that is already removed by a transcript or manual edit.
+ * Find quiet spans from the audio itself, but only outside kept transcript
+ * words. The transcript is authoritative: a softly spoken word remains safe
+ * even when its waveform falls below the selected threshold.
  */
 export function findWaveformSilenceRanges(
   waveform: WaveformPeaks,
@@ -134,30 +135,44 @@ export function findWaveformSilenceRanges(
 
   const frameDuration = waveform.rmsFrameSize / waveform.sampleRate;
   const cuts = getCutRanges(words, duration, manualCuts);
+  const protectedSpeech = words
+    .filter((word) => !isWordCutOut(word, cuts))
+    .map((word) => ({ start: word.start, end: word.end }));
   const out: TimeRange[] = [];
   let quietStart = -1;
 
   const addQuietRun = (fromFrame: number, toFrame: number) => {
     const start = Math.max(0, fromFrame * frameDuration);
     const end = Math.min(duration, toFrame * frameDuration);
-    const quietDuration = end - start;
-    if (
-      quietDuration < minDuration - 1e-4 ||
-      quietDuration > maxDuration + 1e-4
-    ) {
-      return;
-    }
+    const editableQuietParts = subtractCuts({ start, end }, cuts).flatMap(
+      (part) => subtractCuts(part, protectedSpeech)
+    );
 
-    for (const part of subtractCuts({ start, end }, cuts)) {
-      if (part.end - part.start < minDuration - 1e-4) continue;
+    for (const part of editableQuietParts) {
+      const quietDuration = part.end - part.start;
+      if (
+        quietDuration < minDuration - 1e-4 ||
+        quietDuration > maxDuration + 1e-4
+      ) {
+        continue;
+      }
+
+      const touchesSpeechOnLeft = protectedSpeech.some(
+        (speech) => Math.abs(speech.end - part.start) < 1e-4
+      );
+      const touchesSpeechOnRight = protectedSpeech.some(
+        (speech) => Math.abs(speech.start - part.end) < 1e-4
+      );
       const touchesLoudAudioOnLeft =
         fromFrame > 0 && Math.abs(part.start - start) < 1e-4;
       const touchesLoudAudioOnRight =
         toFrame < waveform.rms.length && Math.abs(part.end - end) < 1e-4;
       const paddedStart =
-        part.start + (touchesLoudAudioOnLeft ? Math.max(0, leftPad) : 0);
+        part.start +
+        (touchesLoudAudioOnLeft || touchesSpeechOnLeft ? Math.max(0, leftPad) : 0);
       const paddedEnd =
-        part.end - (touchesLoudAudioOnRight ? Math.max(0, rightPad) : 0);
+        part.end -
+        (touchesLoudAudioOnRight || touchesSpeechOnRight ? Math.max(0, rightPad) : 0);
       if (paddedEnd - paddedStart > 1e-4) {
         out.push({ start: paddedStart, end: paddedEnd });
       }

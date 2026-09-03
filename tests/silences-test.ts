@@ -53,7 +53,7 @@ function toneSectionAudio(): Float32Array {
 }
 
 {
-  // Loudness, rather than transcript boundaries, locates the quiet tail.
+  // Loudness locates the quiet tail, while transcript words remain protected.
   const waveform = buildWaveformPeaks(toneSectionAudio());
   const words = [w(1, 0, 0.25), w(2, 0.45, 1)];
   const ranges = findWaveformSilenceRanges(
@@ -67,7 +67,7 @@ function toneSectionAudio(): Float32Array {
     0
   );
   assert(ranges.length === 1, `expected one waveform silence, got ${ranges.length}`);
-  assert(nearly(ranges[0]!.start, 0.2) && nearly(ranges[0]!.end, 0.5), "waveform boundaries");
+  assert(nearly(ranges[0]!.start, 0.25) && nearly(ranges[0]!.end, 0.45), "waveform boundaries");
 
   const belowNoiseFloor = findWaveformSilenceRanges(
     waveform,
@@ -91,8 +91,48 @@ function toneSectionAudio(): Float32Array {
     0.02,
     0.03
   );
-  assert(nearly(padded[0]!.start, 0.22) && nearly(padded[0]!.end, 0.47), "waveform padding");
+  assert(nearly(padded[0]!.start, 0.27) && nearly(padded[0]!.end, 0.42), "waveform padding");
   console.log("waveform threshold and padding: ok");
+}
+
+{
+  // A quiet run that contains recognized speech is split around the word. The
+  // waveform tool can remove the breaths either side but never the word span.
+  const sampleRate = 16_000;
+  const audio = new Float32Array(sampleRate);
+  for (let i = 0; i < audio.length; i++) {
+    const t = i / sampleRate;
+    const amplitude = t >= 0.1 && t < 0.9 ? 0.01 : 0.1;
+    audio[i] = Math.sin(2 * Math.PI * 200 * t) * amplitude;
+  }
+  const waveform = buildWaveformPeaks(audio);
+  const words = [w(1, 0.4, 0.6)];
+  const ranges = findWaveformSilenceRanges(waveform, words, 1, [], 0.03, 0.1, 0, 0);
+  assert(ranges.length === 2, `expected quiet audio around speech, got ${ranges.length}`);
+  assert(nearly(ranges[0]!.start, 0.1) && nearly(ranges[0]!.end, 0.4), "quiet before word");
+  assert(nearly(ranges[1]!.start, 0.6) && nearly(ranges[1]!.end, 0.9), "quiet after word");
+  console.log("waveform cleanup protects transcript words: ok");
+}
+
+{
+  // Duration eligibility always uses the original quiet run. Padding changes
+  // only what gets cut; it must never make a too-short run eligible.
+  const sampleRate = 16_000;
+  const audio = new Float32Array(sampleRate);
+  for (let i = 0; i < audio.length; i++) {
+    const t = i / sampleRate;
+    const amplitude = t >= 0.2 && t < 0.45 ? 0.01 : 0.1;
+    audio[i] = Math.sin(2 * Math.PI * 200 * t) * amplitude;
+  }
+  const waveform = buildWaveformPeaks(audio);
+  const tooShort = findWaveformSilenceRanges(waveform, [], 1, [], 0.03, 0.3, 0.05, 0.05);
+  assert(tooShort.length === 0, "padding must not qualify a 0.25s quiet run for a 0.3s minimum");
+  const eligible = findWaveformSilenceRanges(waveform, [], 1, [], 0.03, 0.2, 0.05, 0.05);
+  assert(
+    eligible.length === 1 && nearly(eligible[0]!.end - eligible[0]!.start, 0.15),
+    "eligible run should be shortened only after duration matching"
+  );
+  console.log("waveform duration is independent of padding: ok");
 }
 
 {
@@ -151,6 +191,13 @@ function toneSectionAudio(): Float32Array {
   assert(ranges.length === 1, "only leading silence");
   assert(nearly(ranges[0]!.end, 0.5 - SILENCE_PAD), "leading only");
   console.log("short gaps ignored: ok");
+}
+
+{
+  const words = [w(1, 0, 1), w(2, 1.25, 2)];
+  const ranges = findSilenceRanges(words, 2, [], 0.3, 0.1, 0.1);
+  assert(ranges.length === 0, "padding must not qualify a 0.25s transcript gap for a 0.3s minimum");
+  console.log("transcript duration is independent of padding: ok");
 }
 
 {

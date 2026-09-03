@@ -52,8 +52,8 @@ assert(MODELS.base.dtype.webgpu.encoder_model === "fp32", "whisper dtype");
 // );
 
 assert(
-  MODEL_ORDER.includes("parakeet") && MODEL_ORDER.includes("base"),
-  "MODEL_ORDER lists whisper + parakeet"
+  MODEL_ORDER.length === 1 && MODEL_ORDER[0] === "parakeet",
+  "Apple-Silicon build exposes only native Parakeet"
 );
 for (const id of MODEL_ORDER) {
   assert(isModelId(id), `${id} in MODEL_ORDER is a model id`);

@@ -16,13 +16,18 @@ handoff.
 - Native Parakeet v3 transcription through Core ML and the Apple Neural Engine.
 - Native Silero VAD recovery for vocalisations Parakeet heard but did not emit.
 - Filler-word removal that can be previewed, removed, and restored.
-- Manual silence loudness threshold remembered between sessions.
-- Silence duration modes: **Up to** a duration or **Between** two durations.
+- Separate transcript-pause and waveform-quiet cleanup tools. The waveform tool
+  never proposes a cut through a recognized word.
+- Independent remembered settings for each tool, including a manual loudness
+  threshold for waveform cleanup.
+- Duration modes: **Up to** a duration or **Between** two durations.
 - Independent left/right padding, including true zero-padding cuts.
 - Orange previews for proposed silence cuts before applying them.
 - Restorable silence cuts and direct top-level cleanup actions.
 - Lower-memory media ingestion that reads the original source rather than
   copying multi-gigabyte video files into the app.
+- Automatic temporary H.264 viewing proxies when Electron cannot display a
+  source codec such as ProRes. The original file remains the export source.
 - Apple-Silicon-only packaging without the former ONNX speech runtimes.
 
 The original text editor, waveform, media preview, manual cuts, transcript
@@ -117,11 +122,14 @@ The current M1/8 GB baseline and the Electron-to-Swift decision gates are in:
 1. Import the original video or a time-identical proxy.
 2. Let Core ML generate the word-timed transcript.
 3. Preview and remove filler words.
-4. Set silence threshold, duration range, and padding while orange previews show
-   what will be cut.
-5. Apply the silence cuts, restoring any intentional pauses as needed.
-6. Export FCPXML and reconnect to the original 4K media in Final Cut Pro.
-7. Finish colour, captions, graphics, and delivery in Final Cut.
+4. Preview transcript pauses, then remove only the duration range you do not
+   want.
+5. Use waveform cleanup to tighten low-level breaths and tails outside the
+   recognized words. Tune threshold, duration, and left/right padding while the
+   orange ranges remain audible.
+6. Apply the silence cuts, restoring any intentional pauses as needed.
+7. Export FCPXML and reconnect to the original 4K media in Final Cut Pro.
+8. Finish colour, captions, graphics, and delivery in Final Cut.
 
 ## Why Electron remains for now
 

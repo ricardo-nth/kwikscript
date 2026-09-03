@@ -1,6 +1,6 @@
 ---
 version: alpha
-name: "Rescript"
+name: "KwikScript"
 description: "A compact, waveform-led desktop editor for turning spoken media into precise text and timeline cuts."
 colors:
   primary: "#18181b"
@@ -32,13 +32,13 @@ components:
   media-preview: {}
 ---
 
-# Rescript Design System
+# KwikScript Design System
 
 ## Overview
 
 ### Creative North Star
 
-Rescript should feel like a quiet editing console: waveform, transcript, and playback state are the expressive material. It borrows the precision and density of an NLE without reproducing a full professional editor’s chrome.
+KwikScript should feel like a quiet editing console: waveform, transcript, and playback state are the expressive material. It borrows the precision and density of an NLE without reproducing a full professional editor’s chrome.
 
 ### Product context and register
 
@@ -61,7 +61,7 @@ Geist is the product face; system fallbacks cover every supported script. Contro
 
 ## Layout
 
-The editor is a resizable transcript/media workspace above a full-width timeline. Toolbar height and popover geometry remain stable across state changes. Small settings live in existing popovers; primary editing actions remain visible without navigating away from the transcript.
+The editor is a resizable transcript/media workspace above a full-width timeline. Toolbar height and popover geometry remain stable across state changes. Small settings live in existing popovers; primary editing actions remain visible without navigating away from the transcript. Transcript pauses and waveform-defined quiet audio are separate top-level tools because they answer different editing questions and keep independent remembered settings. Kept transcript words are protected regions: waveform cleanup may tighten quiet audio around them, but cannot propose a cut through recognized speech.
 
 ## Elevation & Depth
 
@@ -88,6 +88,10 @@ The native desktop menu owns project history. The transcript, preview, and timel
 ### Forms and overlays
 
 Settings reuse the established compact popover, native checkbox semantics, and localized explanatory text. Popovers do not alter page layout and restore focus when dismissed.
+
+### Media preview
+
+The original source remains authoritative for transcription and export. When Chromium cannot display its video codec, the desktop shell creates a temporary H.264 viewing proxy, shows honest progress in the reserved preview region, and removes the proxy when the app quits.
 
 ### Iconography
 
