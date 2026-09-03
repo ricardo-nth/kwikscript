@@ -301,7 +301,22 @@ export function useTranscriptSelection({
     }
     applyMarks(els);
     clickSelectionRef.current = true;
-    els[0].scrollIntoView({ block: "center" });
+    // Keep timeline-driven selection centred vertically without letting the
+    // browser pan the transcript sideways to reveal a wide toolbar or word.
+    // scrollIntoView() operates on both axes and could leave every subsequent
+    // transcript line clipped at the left edge.
+    const scroller = scrollRef.current;
+    if (scroller) {
+      const wordRect = els[0].getBoundingClientRect();
+      const scrollerRect = scroller.getBoundingClientRect();
+      scroller.scrollTo({
+        top:
+          scroller.scrollTop +
+          wordRect.top -
+          scrollerRect.top -
+          (scroller.clientHeight - wordRect.height) / 2,
+      });
+    }
     setSelection({
       ids: selectedWordIds,
       anyDeleted: selectedWordIds.some((id) => cutOutIds.has(id)),
@@ -314,6 +329,7 @@ export function useTranscriptSelection({
     clearMarks,
     applyMarks,
     containerRef,
+    scrollRef,
     freezeSelectionRef,
   ]);
 
