@@ -47,14 +47,14 @@ KwikScript should feel like a quiet editing console: waveform, transcript, and p
 - **Target markets:** Global desktop and web users; the repository’s nine UI locales are supported equally.
 - **Usage scene:** Long, processor-intensive local media sessions on laptops, with frequent timeline adjustments and reversible cleanup actions.
 - **Register:** Product. Familiarity, legibility, and stable controls take priority over decoration.
-- **Memorable signature:** The transcript and waveform share one edit state: amber transcript-led candidates and cool-gray waveform-led candidates remain playable, while red ranges represent committed cuts.
+- **Memorable signature:** The transcript and waveform share one edit state: red identifies filler-word cleanup, amber identifies transcript pauses, and cool gray identifies waveform-led quiet audio. Preview candidates remain playable; pattern, strike-through, and labels distinguish them from committed cuts.
 - **Restraint:** Settings, export, and project-management surfaces remain compact and subordinate to the media.
 - **Anti-references:** Avoid template-dashboard cards, marketing gradients, oversized controls, or decorative motion that competes with timing information.
 - **Token ownership/runtime mapping:** This document mirrors the canonical Tailwind utilities and shared rules in `app/globals.css`; it does not generate runtime tokens.
 
 ## Colors
 
-Neutral zinc surfaces carry the interface. Indigo is reserved for selection, amber/orange for playable filler and transcript-pause candidates, cool gray for playable waveform-led quiet-audio candidates, and red for committed deletion. Pattern and marker shape reinforce these colors. Dark mode preserves the semantic roles rather than inverting their meaning. Focus and high-contrast behavior must remain visible even when the neutral chrome is quiet.
+Neutral zinc surfaces carry the interface. Indigo is reserved for selection, red for filler-word cleanup and committed transcript-word cuts, amber/orange for transcript-pause candidates, and cool gray for playable waveform-led quiet-audio candidates. Pattern, strike-through, labels, and marker shape distinguish playable previews from committed edits so color never carries state alone. Dark mode preserves the semantic roles rather than inverting their meaning. Focus and high-contrast behavior must remain visible even when the neutral chrome is quiet.
 
 ## Typography
 
@@ -62,7 +62,7 @@ Geist is the product face; system fallbacks cover every supported script. Contro
 
 ## Layout
 
-The editor is a three-column cleanup/transcript/media workspace above a full-width timeline. The left cleanup sidebar follows the working order: waveform-defined quiet audio, filler words, then transcript pauses. Top-bar view controls independently collapse the cleanup and media panes, and those device-level choices persist so the transcript can become a distraction-free review surface. Hiding the media pane never unmounts playback; audio projects omit its visual control entirely. Only the selected cleanup tool exposes its controls, while the transcript and timeline remain visible so candidate changes can be judged in context. The middle transcript header owns contextual selection actions; it never covers the selected words. The right panel remains the resizable media preview when shown. Kept transcript words are protected regions: waveform cleanup may tighten quiet audio around them, but cannot propose a cut through recognized speech.
+The editor is a three-column cleanup/transcript/media workspace above a full-width timeline. The left cleanup sidebar follows the working order: waveform-defined quiet audio, filler words, then transcript pauses. Top-bar view controls independently collapse the cleanup and media panes, and those device-level choices persist so the transcript can become a distraction-free review surface. Hiding the media pane never unmounts playback; audio projects omit its visual control entirely. Only the selected cleanup tool exposes its controls, while the transcript and timeline remain visible so candidate changes can be judged in context. The middle transcript header owns contextual selection actions; it never covers the selected words. The right panel remains the resizable media preview when shown. The desktop shell's expanded resting size reserves enough height for the tallest cleanup mode without an initial sidebar scroll on a typical laptop display. Kept transcript words are protected regions: waveform cleanup may tighten quiet audio around them, but cannot propose a cut through recognized speech.
 
 ## Elevation & Depth
 
@@ -76,7 +76,7 @@ Controls use 6–12 px radii: tighter for dense segmented controls, broader for 
 
 ### Foundational visual states
 
-Every action has visible hover, focus, pressed, disabled, and busy treatment. Loading indicators reserve their final geometry. Amber transcript-led and cool-gray waveform-led ranges are playable previews; red deleted ranges are committed and restorable. Only the active sidebar tool owns the candidate layer: choosing quiet audio or pauses replaces the other preview, while choosing filler words clears silence previews. Tool counts and the bottom remove/restore actions remain in stable locations as settings change.
+Every action has visible hover, focus, pressed, disabled, and busy treatment. Loading indicators reserve their final geometry. Red filler-word, amber transcript-pause, and cool-gray waveform-led ranges can be playable previews; committed ranges add strike-through, hatching, or explicit restored/removed labels and remain reversible. Only the active sidebar tool owns the candidate layer: choosing quiet audio or pauses replaces the other preview, while choosing filler words clears silence previews. Tool counts and the bottom remove/restore actions remain in stable locations as settings change.
 
 ### Buttons and actions
 
@@ -88,7 +88,7 @@ The native desktop menu owns project history. The transcript, preview, and timel
 
 ### Forms and overlays
 
-Silence settings and the personal filler-word library live in the cleanup sidebar. Its tab already owns the tool name and count, so the control panel does not repeat a second heading. Explanatory copy lives behind click-accessible info controls, while units remain inside precise numeric fields. Padding starts linked as one symmetric control and can be unlocked for independent left/right adjustment; linking unequal values keeps the larger, speech-safer value. Personal words and consecutive-word phrases are stored on the device and apply to every project. Selecting transcript words exposes Cut, Correct, and Mark as filler in the transcript header; Speaker appears only when multi-speaker detection is enabled. Correction also happens in that header. Popovers are reserved for genuine anchored choices such as speaker assignment and compact contextual help.
+Silence settings and the personal filler-word library live in the cleanup sidebar. Its tab already owns the tool name and count, so the control panel does not repeat a second heading. Explanatory copy lives behind click-accessible info controls, while units remain in a dedicated slot inside the shared numeric-field frame. Native steppers stay available, and the value, spinner, and unit must never overlap at supported precision. Padding starts linked as one symmetric control and can be unlocked for independent left/right adjustment; linking unequal values keeps the larger, speech-safer value. Personal words and consecutive-word phrases are stored on the device and apply to every project. Selecting transcript words exposes Cut, Correct, and Mark as filler in the transcript header; Speaker appears only when multi-speaker detection is enabled. Correction also happens in that header. Popovers are reserved for genuine anchored choices such as speaker assignment and compact contextual help.
 
 ### Media preview
 

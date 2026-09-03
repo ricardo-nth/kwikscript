@@ -707,7 +707,7 @@ type WindowMode = "compact" | "expanded";
  *  roomy one once the editor (transcript + preview + timeline) takes over. */
 const WINDOW_SIZES: Record<WindowMode, { width: number; height: number }> = {
   compact: { width: 560, height: 400 },
-  expanded: { width: 1080, height: 740 },
+  expanded: { width: 1080, height: 752 },
 };
 const MIN_SIZE = { width: 560, height: 400 };
 

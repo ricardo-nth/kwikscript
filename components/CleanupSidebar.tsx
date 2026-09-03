@@ -136,7 +136,9 @@ function SettingSlider({
             </InlineInfo>
           )}
         </div>
-        <div className="relative shrink-0">
+        <div
+          className={`flex h-7 shrink-0 items-stretch overflow-hidden rounded-md border border-zinc-200 bg-white transition focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-950 dark:focus-within:border-indigo-500 ${compact ? "w-[5rem]" : "w-[5.5rem]"}`}
+        >
           <input
             type="number"
             value={value}
@@ -148,12 +150,12 @@ function SettingSlider({
               const next = Number(event.target.value);
               if (Number.isFinite(next)) onChange(next);
             }}
-            className={`h-7 rounded-md border border-zinc-200 bg-white py-0 pl-1.5 text-right text-[11px] tabular-nums text-zinc-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:focus:border-indigo-500 ${compact ? "w-16" : "w-[5rem]"} ${suffix ? "pr-5" : "pr-2"}`}
+            className="min-w-0 flex-1 border-0 bg-transparent py-0 pl-2 pr-0 text-left text-[11px] tabular-nums text-zinc-700 outline-none dark:text-zinc-200"
           />
           {suffix && (
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-zinc-400 dark:text-zinc-500"
+              className="pointer-events-none flex w-5 shrink-0 items-center justify-center pr-1 text-[10px] text-zinc-400 dark:text-zinc-500"
             >
               {suffix}
             </span>
@@ -217,7 +219,7 @@ function SectionLabel({
   info,
 }: {
   children: React.ReactNode;
-  info?: string;
+  info?: React.ReactNode;
 }) {
   const { t } = useI18n();
   return (
@@ -227,7 +229,7 @@ function SectionLabel({
       </h3>
       {info && (
         <InlineInfo label={t("tools.moreInfo", { topic: String(children) })}>
-          <p>{info}</p>
+          {typeof info === "string" ? <p>{info}</p> : info}
         </InlineInfo>
       )}
     </div>
@@ -713,7 +715,9 @@ export default function CleanupSidebar() {
                   selected
                     ? id === "quiet"
                       ? "bg-slate-200/70 text-slate-800 dark:bg-slate-800 dark:text-slate-100"
-                      : "bg-amber-100/80 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
+                      : id === "fillers"
+                        ? "bg-red-50 text-red-700 dark:bg-red-950/55 dark:text-red-300"
+                        : "bg-amber-100/80 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
                     : "text-zinc-500 hover:bg-white hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
                 }`}
               >
@@ -743,7 +747,19 @@ export default function CleanupSidebar() {
             <div className="space-y-3">
               <div>
                 <SectionLabel
-                  info={`${t("tools.fillerCleanupHelp")} ${t("tools.customFillersHelp")} ${t("tools.builtInFillersHelp")}`}
+                  info={
+                    <div className="space-y-2.5">
+                      <p>
+                        {t("tools.fillerCleanupHelp")} {t("tools.customFillersHelp")}
+                      </p>
+                      <div className="border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                        <p className="font-semibold text-zinc-800 dark:text-zinc-100">
+                          {t("tools.builtInFillersTitle")}
+                        </p>
+                        <p className="mt-0.5">{t("tools.builtInFillersHelp")}</p>
+                      </div>
+                    </div>
+                  }
                 >
                   {t("tools.customFillers")}
                 </SectionLabel>
